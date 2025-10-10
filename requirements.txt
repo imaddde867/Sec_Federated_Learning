@@ -1,0 +1,15 @@
+# Core FL & Privacy
+torch>=2.0
+torchvision
+opacus  # For DP-SGD
+flwr    # Flower framework for FL
+tenseal # Homomorphic encryption
+
+# Attack libraries
+breaching  # Gradient inversion attacks
+gradientinversion
+
+# Evaluation
+scikit-image  # PSNR/SSIM
+matplotlib
+tensorboard
