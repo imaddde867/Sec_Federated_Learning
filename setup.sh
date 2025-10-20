@@ -57,7 +57,7 @@ else
 fi
 
 echo ""
-echo "=== Setup Complete ==="
+echo "Setup Complete -------------------"
 echo "To activate this environment, run:"
 echo "  conda activate ${ENV_NAME}"
 echo ""
