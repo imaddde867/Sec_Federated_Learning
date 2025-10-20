@@ -2,7 +2,14 @@
 Security in Federated Learning
 
 ## Overview
-This project focuses on security and privacy aspects of federated learning systems.
+This repository hosts experiments and utilities for benchmarking privacy-preserving techniques in federated learning scenarios. The focus is on image classification with CIFAR-100, selective encryption using TenSEAL, and resilience against model inversion attacks.
+
+## Repository Layout
+
+- `src/` — Reusable Python packages for data handling, model definitions, encryption helpers, attack implementations, and FL simulation utilities.
+- `experiments/` — Jupyter notebooks for running individual experiments and visualizing results.
+- `reports/` — Generated metrics, plots, and written summaries.
+- `docs/` — Project documentation and planning artefacts.
 
 ## Setup Instructions
 
