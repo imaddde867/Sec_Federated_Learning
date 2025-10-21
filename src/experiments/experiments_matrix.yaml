@@ -1,0 +1,10 @@
+# Grid of experiments: algorithms, key sizes/modes, DP params, and load levels
+algorithms: [ "none", "dp-only", "enc-only", "dp-then-enc" ]
+encryption_modes: [ "aes-gcm-128", "aes-gcm-256", "chacha20-poly1305" ]
+noise_multiplier: [ 0.0, 0.5, 1.0 ]
+clip_norm: [ 0.0, 1.0, 2.0 ]
+clients_per_round: [ 2, 5 ]
+local_epochs: [ 1 ]
+batch_size: [ 32 ]
+load_level: [ "low", "med" ]
+rounds: [ 1, 5 ]
