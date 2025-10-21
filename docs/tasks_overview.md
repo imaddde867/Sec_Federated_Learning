@@ -1,7 +1,7 @@
 # Tasks Overview
 
 - Implement CIFAR-100 data pipeline and preprocessing.
-- Define baseline and custom CNN architectures (ResNet18, VGG16, custom variants).
+- Define baseline fedderated learning model and custom CNN architectures (ResNet18, VGG16, custom variants).
 - Integrate TenSEAL-based selective encryption for federated client updates.
 - Prototype Yin, Random, and Confusion attack strategies.
 - Establish federated learning simulation harness with configurable rounds and clients.
