@@ -74,3 +74,13 @@ This ensures all code runs within the configured environment with the correct de
 - `experiments/` - Experimental scripts
 - `scripts/` - Utility scripts
 - `src/` - Source code
+
+## Run Algorithm
+- make sure to have jupyter installed 
+```bash
+pip install jupyter
+```
+- run 
+```bash
+jupyter lab
+```
