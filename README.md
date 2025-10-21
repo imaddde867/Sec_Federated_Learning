@@ -23,26 +23,44 @@ This repository hosts experiments and utilities for benchmarking privacy-preserv
 
 ## Setup Instructions
 
-### Step 1: Run the Setup Script
-First, make the setup script executable and run it to create the conda environment:
+### Option A (macOS/Linux)
+- Ensure Conda/Miniconda is installed and available in your shell.
+- From the repo root, run:
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-### Step 2: Activate the Environment
+If using Git Bash on Windows, you can also run the above `.sh` script from Git Bash.
+
+### Option B (Windows PowerShell / Anaconda Prompt)
+- Open PowerShell or Anaconda Prompt where `conda` is available. If needed, initialize once with `conda init powershell` and restart the shell.
+- From the repo root, run:
+
+```powershell
+PowerShell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+If execution is restricted, run in the current session:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+./setup.ps1
+```
+
+### Activate the Environment (all platforms)
 Activate the newly created `fl_privacy` conda environment:
 
 ```bash
 conda activate fl_privacy
 ```
 
-### Step 3: Configure VS Code Python Interpreter
+### Configure VS Code Python Interpreter
 To ensure VS Code uses the correct Python environment:
 
-1. Press `Cmd + Shift + P` (macOS) to open the Command Palette
-2. Type and select **"Python: Select Interpreter"**
+1. Open the Command Palette: `Cmd + Shift + P` (macOS) or `Ctrl + Shift + P` (Windows/Linux)
+2. Type and select "Python: Select Interpreter"
 3. Choose the `fl_privacy` environment from the list
 
 This ensures all code runs within the configured environment with the correct dependencies.
