@@ -1,0 +1,20 @@
+# Experiment matrix specification
+models: [resnet18, vgg16, smallcnn]
+layers: [None, L1, L1-2, L1-3, Full]
+partitioning:
+  - {type: iid}
+  - {type: dirichlet, alpha: 0.5}
+  - {type: dirichlet, alpha: 0.1}
+attacks: [yin, random]
+seeds: [1,2,3]
+
+# CI smoke slice
+ci_smoke:
+  num_clients: 5
+  rounds: 20
+  clients_per_round: 5
+  models: [smallcnn]
+  layers: [None, L1]
+  partitioning: [{type: iid}]
+  attacks: [yin]
+  seeds: [1]

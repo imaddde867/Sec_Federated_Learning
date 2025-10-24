@@ -1,0 +1,46 @@
+defaults: []
+project:
+  name: dp_fedlearn
+  output_dir: reports
+
+seed: 1
+commit: ${oc.env:COMMIT_SHA,notgit}
+
+data:
+  dataset: CIFAR10
+  num_clients: 100
+  clients_per_round: 10
+  partition: iid  # {iid, dirichlet}
+  dirichlet_alpha: 0.5
+
+model:
+  name: resnet18  # {resnet18, vgg16, smallcnn}
+  num_classes: 10
+
+training:
+  rounds: 200
+  local_epochs: 1
+  batch_size: 64
+  lr: 0.1
+  optimizer: sgd
+
+encryption:
+  scheme: dp_selective   # {none, dp_selective}
+  layers: L1             # {None, L1, L1-2, L1-3, Full}
+  noise_multiplier: 1.0  # Gaussian noise sigma
+  clip_norm: 1.0
+  secure_aggregation: false
+
+attack:
+  name: yin              # {yin, random}
+  recon_per_client: 8
+  max_iters: 1000
+
+logging:
+  to_jsonl: true
+  to_mlflow: false
+  mlflow_tracking_uri: null
+  level: INFO
+
+orchestration:
+  exp_id: null  # filled at runtime from config hash + commit + seed
