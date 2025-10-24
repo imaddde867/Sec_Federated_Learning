@@ -1,0 +1,50 @@
+{
+  "attack": {
+    "max_iters": 1000,
+    "name": "yin",
+    "recon_per_client": 8
+  },
+  "batch_size": 64,
+  "commit": "${oc.env:COMMIT_SHA,notgit}",
+  "data": {
+    "clients_per_round": 5,
+    "dataset": "CIFAR10",
+    "dirichlet_alpha": 0.5,
+    "num_clients": 10,
+    "partition": "iid"
+  },
+  "defaults": [],
+  "encryption": {
+    "clip_norm": 1.0,
+    "layers": "L1",
+    "noise_multiplier": 0.5,
+    "scheme": "dp_selective",
+    "secure_aggregation": false
+  },
+  "logging": {
+    "level": "INFO",
+    "mlflow_tracking_uri": null,
+    "to_jsonl": true,
+    "to_mlflow": false
+  },
+  "lr": 0.01,
+  "model": {
+    "name": "smallcnn",
+    "num_classes": 10
+  },
+  "orchestration": {
+    "exp_id": null
+  },
+  "project": {
+    "name": "dp_fedlearn",
+    "output_dir": "reports"
+  },
+  "seed": 1,
+  "training": {
+    "batch_size": 64,
+    "local_epochs": 1,
+    "lr": 0.1,
+    "optimizer": "sgd",
+    "rounds": 2
+  }
+}

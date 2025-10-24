@@ -1,0 +1,2 @@
+{"ts": "2025-10-24T07:43:16.043460Z", "level": "INFO", "event": "round_end", "exp_id": "ef2b17ddf180bea3", "commit": "42ff3a20d7fe354ef509b5a3aacd9f1c89ffd235", "seed": 1, "round": 0, "top1": 0.005, "bytes_up": 1.23, "bytes_down": 0.45, "time_s": 0.005}
+{"ts": "2025-10-24T07:43:16.049809Z", "level": "INFO", "event": "round_end", "exp_id": "ef2b17ddf180bea3", "commit": "42ff3a20d7fe354ef509b5a3aacd9f1c89ffd235", "seed": 1, "round": 1, "top1": 0.01, "bytes_up": 1.23, "bytes_down": 0.45, "time_s": 0.005}
