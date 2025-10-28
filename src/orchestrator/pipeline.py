@@ -54,11 +54,11 @@ def run_training_rounds(cfg: Dict[str, Any], exp_root: Path, logger):
         model.load_state_dict(global_sd)
 
         # Evaluation
-        acc = evaluate(model, test_loader, device)["top1"]
+        acc = evaluate(model, test_loader, device)
 
         logger.info("round_end", round=r, top1=acc,
-                    bytes_up=123456, bytes_down=654321,
-                    time_s=time.time() - start)
+            bytes_up=123456, bytes_down=654321,
+            time_s=time.time() - start)
 
     # Optional reconstruction attack
     (exp_root / "recon").mkdir(exist_ok=True, parents=True)

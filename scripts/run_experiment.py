@@ -3,7 +3,6 @@ import os, json, argparse, sys
 from pathlib import Path; sys.path.append(str(Path(__file__).resolve().parents[1]))
 from pathlib import Path
 
-import yaml
 
 from src.utils.logging_utils import JsonlLogger, get_git_commit
 from src.utils.config_utils import load_config, normalize_config

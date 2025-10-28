@@ -36,3 +36,8 @@ class DPSelectiveEncryptor:
             else:
                 out[k] = v
         return out
+
+    # Alias for pipeline compatibility
+    def apply(self, delta: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """Wrapper to call encrypt_state_dict(); kept for backward compatibility."""
+        return self.encrypt_state_dict(delta)
