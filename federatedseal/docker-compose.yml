@@ -1,0 +1,10 @@
+services:
+  federated-tenseal:
+    build: .
+    container_name: federated-tenseal
+    volumes:
+      - ./data:/app/data        # dataset folder
+      - ./logs:/app/logs        # logs folder
+    environment:
+      - PYTHONUNBUFFERED=1
+    tty: true

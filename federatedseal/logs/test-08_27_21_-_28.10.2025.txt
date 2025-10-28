@@ -1,0 +1,406 @@
+🔐 TenSEAL Encryption enabled
+Federated Training Log - 08:27:21_-_28.10.2025
+============================================================
+
+=== Round 1/1 ===
+
+Client 1 training...
+
+=== Round 1 | Client 1 ===
+Plain model layers:
+
+conv1.weight (shape=(64, 3, 7, 7)):
+  Sample weights: [ 0.04891965  0.07271089  0.12991637  0.0906852   0.05349554 -0.00575853
+  0.04345294  0.03859171 -0.00995858  0.04671198]
+
+bn1.weight (shape=(64,)):
+  Sample weights: [1.0892192  0.97320676 0.98974276 0.9485234  0.97155267 0.9441281
+ 0.9876764  1.2013779  0.9295449  0.97742647]
+
+bn1.bias (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+bn1.running_mean (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+bn1.running_var (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer1.0.conv1.weight (shape=(64, 64, 3, 3)):
+  Sample weights: [-0.02900276  0.0186913  -0.07988981  0.01567331 -0.10829198  0.00575059
+  0.07083953 -0.06423719 -0.05346365 -0.0463424 ]
+
+layer1.0.bn1.weight (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.0.bn1.bias (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.0.bn1.running_mean (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.0.bn1.running_var (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.0.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer1.0.conv2.weight (shape=(64, 64, 3, 3)):
+  Sample weights: [-0.00422346 -0.07147392 -0.04791689  0.05128913 -0.09617308 -0.07641756
+  0.0296356   0.05027562  0.00903561 -0.06476275]
+
+layer1.0.bn2.weight (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.0.bn2.bias (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.0.bn2.running_mean (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.0.bn2.running_var (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.0.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer1.1.conv1.weight (shape=(64, 64, 3, 3)):
+  Sample weights: [-0.07391138  0.05483164 -0.0254251  -0.0109391   0.05646677  0.01848477
+  0.09679458  0.08035705  0.04061062  0.00959631]
+
+layer1.1.bn1.weight (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.1.bn1.bias (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.1.bn1.running_mean (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.1.bn1.running_var (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.1.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer1.1.conv2.weight (shape=(64, 64, 3, 3)):
+  Sample weights: [-0.07885014  0.01811319  0.05123148  0.0271498   0.16878371 -0.03360445
+ -0.07063156 -0.01074188  0.03388569  0.0335655 ]
+
+layer1.1.bn2.weight (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.1.bn2.bias (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.1.bn2.running_mean (shape=(64,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer1.1.bn2.running_var (shape=(64,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer1.1.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer2.0.conv1.weight (shape=(128, 64, 3, 3)):
+  Sample weights: [-0.02142845  0.08528459  0.01419264 -0.01012954  0.03176867 -0.00420383
+ -0.00480165 -0.04468353 -0.08229072  0.08378451]
+
+layer2.0.bn1.weight (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.bn1.bias (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.bn1.running_mean (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.bn1.running_var (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer2.0.conv2.weight (shape=(128, 128, 3, 3)):
+  Sample weights: [ 0.0720421  -0.01389995  0.00460536 -0.00793063  0.07944342 -0.00425976
+  0.03775298 -0.0344235   0.0353302  -0.05775717]
+
+layer2.0.bn2.weight (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.bn2.bias (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.bn2.running_mean (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.bn2.running_var (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer2.0.downsample.0.weight (shape=(128, 64, 1, 1)):
+  Sample weights: [-0.03547448  0.01791704 -0.15395248 -0.01626977 -0.00675299  0.20464924
+ -0.08814235 -0.01133074  0.10156441 -0.15222462]
+
+layer2.0.downsample.1.weight (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.downsample.1.bias (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.downsample.1.running_mean (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.0.downsample.1.running_var (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.0.downsample.1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer2.1.conv1.weight (shape=(128, 128, 3, 3)):
+  Sample weights: [ 8.8879928e-02  1.9488841e-02  1.2470158e-02  1.4675676e-03
+  2.5608912e-03 -4.9373738e-02 -4.9303693e-05  1.5711382e-02
+ -3.0587539e-02 -3.7656106e-02]
+
+layer2.1.bn1.weight (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.1.bn1.bias (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.1.bn1.running_mean (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.1.bn1.running_var (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.1.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer2.1.conv2.weight (shape=(128, 128, 3, 3)):
+  Sample weights: [-0.01495143 -0.00279151  0.01145237 -0.05412442 -0.00905991  0.02689346
+  0.0033218  -0.01091072  0.0422998  -0.0127447 ]
+
+layer2.1.bn2.weight (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.1.bn2.bias (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.1.bn2.running_mean (shape=(128,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer2.1.bn2.running_var (shape=(128,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer2.1.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer3.0.conv1.weight (shape=(256, 128, 3, 3)):
+  Sample weights: [ 0.05768302 -0.03218985 -0.02370689  0.01490971 -0.05691908  0.00934425
+ -0.00794811  0.02151045  0.04771213 -0.05703693]
+
+layer3.0.bn1.weight (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.bn1.bias (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.bn1.running_mean (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.bn1.running_var (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer3.0.conv2.weight (shape=(256, 256, 3, 3)):
+  Sample weights: [-0.04410471  0.02390898  0.01270747  0.05414868 -0.0018564   0.00733444
+  0.00473388  0.00888343 -0.00121129 -0.02552926]
+
+layer3.0.bn2.weight (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.bn2.bias (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.bn2.running_mean (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.bn2.running_var (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer3.0.downsample.0.weight (shape=(256, 128, 1, 1)):
+  Sample weights: [-0.05823672  0.08933323  0.08056415 -0.00688542 -0.01850401 -0.09214778
+  0.01164894  0.04158951 -0.12483268  0.06417602]
+
+layer3.0.downsample.1.weight (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.downsample.1.bias (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.downsample.1.running_mean (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.0.downsample.1.running_var (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.0.downsample.1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer3.1.conv1.weight (shape=(256, 256, 3, 3)):
+  Sample weights: [ 0.01176292 -0.03180525  0.02870149  0.0039378   0.05662391  0.01693243
+  0.02101768  0.00871783  0.00540884  0.01048596]
+
+layer3.1.bn1.weight (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.1.bn1.bias (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.1.bn1.running_mean (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.1.bn1.running_var (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.1.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer3.1.conv2.weight (shape=(256, 256, 3, 3)):
+  Sample weights: [-0.01666796  0.04822049 -0.01968336 -0.01910777 -0.02229772 -0.01559258
+ -0.00608639 -0.06585129 -0.02536607 -0.03955617]
+
+layer3.1.bn2.weight (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.1.bn2.bias (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.1.bn2.running_mean (shape=(256,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer3.1.bn2.running_var (shape=(256,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer3.1.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer4.0.conv1.weight (shape=(512, 256, 3, 3)):
+  Sample weights: [ 0.03214563  0.00675903 -0.03432395 -0.00999332 -0.02915177  0.01041008
+  0.00644162  0.02837165 -0.01723986 -0.02253951]
+
+layer4.0.bn1.weight (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.bn1.bias (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.bn1.running_mean (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.bn1.running_var (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer4.0.conv2.weight (shape=(512, 512, 3, 3)):
+  Sample weights: [ 0.00939422 -0.00633481 -0.01668869  0.00151527  0.01737289  0.01617416
+  0.01965711  0.01127278  0.00772806 -0.01589518]
+
+layer4.0.bn2.weight (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.bn2.bias (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.bn2.running_mean (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.bn2.running_var (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer4.0.downsample.0.weight (shape=(512, 256, 1, 1)):
+  Sample weights: [-0.01831434 -0.08422791 -0.06613412  0.02144372 -0.03772298 -0.07263159
+  0.00423211  0.12034305 -0.03077409  0.05504281]
+
+layer4.0.downsample.1.weight (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.downsample.1.bias (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.downsample.1.running_mean (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.0.downsample.1.running_var (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.0.downsample.1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer4.1.conv1.weight (shape=(512, 512, 3, 3)):
+  Sample weights: [-0.00429807  0.01576358  0.03521511 -0.01674802 -0.02931987  0.02308531
+  0.00678101 -0.00084196 -0.02195529  0.03410356]
+
+layer4.1.bn1.weight (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.1.bn1.bias (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.1.bn1.running_mean (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.1.bn1.running_var (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.1.bn1.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+layer4.1.conv2.weight (shape=(512, 512, 3, 3)):
+  Sample weights: [ 0.00829745  0.02828013  0.00546966  0.01813305 -0.02299641  0.01570622
+  0.02896315  0.00506563  0.01183506 -0.02985477]
+
+layer4.1.bn2.weight (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.1.bn2.bias (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.1.bn2.running_mean (shape=(512,)):
+  Sample weights: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+layer4.1.bn2.running_var (shape=(512,)):
+  Sample weights: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+
+layer4.1.bn2.num_batches_tracked (shape=()):
+  Sample weights: [0]
+
+fc.weight (shape=(100, 512)):
+  Sample weights: [ 0.00849092 -0.01487936  0.01493378 -0.04172348  0.02148377  0.02261038
+  0.00466615 -0.02408299  0.01667543  0.03482117]
+
+fc.bias (shape=(100,)):
+  Sample weights: [-0.04008748  0.03592272  0.0285339  -0.03462226 -0.02821372 -0.03092136
+  0.01887007  0.00274526 -0.01847442  0.00148341]
+
+[No per-layer encryption metrics found]
+
+Round 1 completed.
+
+Training done.
