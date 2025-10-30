@@ -11,3 +11,7 @@ src/fl_simulation/data/
 src/fl_simulation/.ipynb_checkpoints/
 **/.ipynb_checkpoints/
 .DS_Store
+__pycache__/
+*.pyc
+data/
+reports/
