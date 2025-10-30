@@ -10,3 +10,4 @@ src/fl_simulation/fedavg_metrics_*/
 src/fl_simulation/data/
 src/fl_simulation/.ipynb_checkpoints/
 **/.ipynb_checkpoints/
+.DS_Store

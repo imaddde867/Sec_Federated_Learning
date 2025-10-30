@@ -5,15 +5,16 @@ Security in Federated Learning
 This repository hosts experiments and utilities for benchmarking privacy-preserving techniques in federated learning scenarios. The focus is on image classification with CIFAR-100, selective encryption using TenSEAL, and resilience against model inversion attacks.
 
 ## Current Progress
-- Implemented an end-to-end FedAvg prototype in `src/fl_simulation/fed_avg.ipynb` using ResNet18 on CIFAR-100 with three IID clients and five communication rounds, configured for Apple `mps` acceleration.
-- Set up IID partitioning, local SGD training with momentum, and global aggregation/evaluation, reaching ~41.9% top-1 accuracy on the CIFAR-100 test set after five rounds.
-- Automated dataset acquisition via `torchvision` and validated the training loop across all rounds.
+- Extended `src/fl_simulation/fed_avg.ipynb` into a configurable FedAvg run with CIFAR-100, 20 clients sampled 5/round, Dirichlet α=0.5 non-IID splits, and CUDA execution.
+- Added telemetry capture per client (gradient/per-layer norms, loss traces, batch sizes, class histograms) plus deterministic seeding and reusable CIFAR-100 loaders.
+- Persisted round artifacts via `fedavg_metrics_{round}_meta.json` and companion `_tensors.pt` blobs holding raw gradients, deltas, and server aggregates.
+- Completed a 10-round experiment; training diverges from round 4 onward (NaN loss, ~1% accuracy) because the current server delta averaging relies on `Tensor.T` for high-rank tensors, which PyTorch warns will misbehave.
 
 ## Next Steps
-- Turn the notebook prototype into a configurable FL harness (parameterized clients/rounds/devices, tracked round metrics, persisted artifacts) in line with `docs/tasks_overview.md`.
-- Expand data handling to support alternative architectures (VGG16, custom CNNs) and non-IID sampling, preparing for attack/evaluation scenarios.
-- Integrate TenSEAL-based selective encryption for client updates and stage Yin/Random/Confusion attack simulations with PSNR/SSIM reporting.
-- Add regression checks or lightweight CI scripts to protect the baseline as security and attack modules evolve.
+- Replace the server aggregate calculation with a dimension-safe weighted average (explicit broadcasting instead of `Tensor.T`) and confirm the run no longer hits NaNs.
+- Evaluate safeguard options such as gradient clipping or mixed-precision limits before scaling to more rounds or harsher non-IID regimes.
+- Script a lightweight report that summarizes the exported JSON/PT metrics across rounds for faster experiment review.
+- Once the baseline is stable, resume TenSEAL selective encryption experiments and planned attack simulations with SSIM/PSNR reporting.
 
 ## Repository Layout
 
