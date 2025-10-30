@@ -1,3 +1,12 @@
-.DS_Store
-data
-.ipynb_checkpoints
+# ignore binary model artifacts
+*.pt
+*.pth
+*.pkl
+*.npy
+*.npz
+
+# ignore cache or temp folders
+src/fl_simulation/fedavg_metrics_*/
+src/fl_simulation/data/
+src/fl_simulation/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
