@@ -1,5 +1,4 @@
-# CAPSTONE
-Security in Federated Learning
+# Security in Federated Learning
 
 ## Overview
 This repository hosts experiments and utilities for benchmarking privacy-preserving techniques in federated learning scenarios. The focus is on image classification with CIFAR-100, selective encryption using TenSEAL, and resilience against model inversion attacks.
