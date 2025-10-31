@@ -1,3 +1,26 @@
 .DS_Store
 data
 .ipynb_checkpoints
+
+# Federated Learning Outputs
+src/fl_simulation/reports/
+*.pt
+*.pth
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
