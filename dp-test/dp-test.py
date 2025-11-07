@@ -27,7 +27,7 @@ from torchvision import datasets, transforms, models
 # CONFIGURATION 
 CONFIG = {
     # Federated Learning
-    "num_rounds": 10,
+    "num_rounds": 70,
     "num_clients": 20,
     "clients_per_round": 5,  # Partial participation
     "local_epochs": 1,
@@ -42,9 +42,9 @@ CONFIG = {
     # Model & Training
     "model_arch": "resnet18",
     "optimizer": "SGD",
-    "learning_rate": 0.01,
+    "learning_rate": 0.5,
     "momentum": 0.9,
-    "weight_decay": 5e-4,
+    "weight_decay": 1e-4,
     
     # Capture settings
     "max_steps_to_store": None,  # None = store all, or set limit (e.g. 50)
@@ -256,10 +256,15 @@ def train_one_client_with_capture(
     
     local_after = clone_state(model)
     
-    # Compute delta
+    # Compute delta: only for trainable parameters (skip buffers like running_mean / running_var)
+    param_names = set(n for n, _ in model.named_parameters())
     delta = OrderedDict()
     for k in local_after.keys():
-        delta[k] = to_cpu_f32(local_after[k]) - to_cpu_f32(global_before[k])
+        if k in param_names:
+            delta[k] = to_cpu_f32(local_after[k]) - to_cpu_f32(global_before[k])
+        else:
+            # skip buffers (e.g., BatchNorm running_mean/running_var) — they will remain unchanged on server
+            continue
     
     # Diagnostics
     if len(grads_per_step_raw) > 0:
@@ -398,7 +403,6 @@ def clip_and_add_dp_noise(model_updates: Dict[int, Dict[str, torch.Tensor]],
         noisy_updates[cid] = {k: v.cpu().float().clone() for k, v in clipped_update.items()}
     return noisy_updates
 
-# ## Federated Round with Capture (patched to apply DP + encryption)
 def run_fed_round_with_capture(
     round_num: int,
     global_model: nn.Module,
@@ -427,6 +431,7 @@ def run_fed_round_with_capture(
     raw_gradients = {}
     model_updates = {}
     
+    # ---- local training ----
     for cid, loader in clients.items():
         cseed = (client_seeds or {}).get(cid)
         result = train_one_client_with_capture(
@@ -463,54 +468,55 @@ def run_fed_round_with_capture(
         if return_indices and ("batch_indices" in tele):
             client_metrics[cid]["batch_indices"] = tele["batch_indices"]
     
-    # ---------- Apply Differential Privacy (client-side) ----------
+    # ---- Differential Privacy (clipping + noise) ----
     clip_norm = (training_meta or {}).get("clip_norm", 1.0)
-    dp_sigma = (training_meta or {}).get("dp_sigma", 0.0)  # if 0.0, DP disabled
+    dp_sigma = (training_meta or {}).get("dp_sigma", 0.0)
     mask_scale = (training_meta or {}).get("mask_scale", 1.0)
-    # Ensure model_updates are cpu float tensors
+
     for cid in list(model_updates.keys()):
         model_updates[cid] = {k: v.cpu().float().clone() for k, v in model_updates[cid].items()}
     
-    if dp_sigma and dp_sigma > 0.0:
-        model_updates = clip_and_add_dp_noise(model_updates, clip_norm=clip_norm, dp_sigma=dp_sigma, device="cpu")
-    else:
-        # if dp_sigma == 0, still optionally clip (without noise) if clip_norm specified
-        if clip_norm is not None:
-            model_updates = clip_and_add_dp_noise(model_updates, clip_norm=clip_norm, dp_sigma=0.0, device="cpu")
-    
-    # ---------- Simulated client-side encryption (pairwise mask) ----------
-    # In production, encryption/mask generation happens on clients. Here we simulate it.
+    model_updates = clip_and_add_dp_noise(
+        model_updates, clip_norm=clip_norm, dp_sigma=dp_sigma, device="cpu"
+    )
+
+    # ---- Secure aggregation (pairwise masking) ----
+    # FedAvg requires weighted average: sum_i n_i * delta_i / total_samples
+    weighted_updates = {}
+    sizes = []
+    for cid in participating_clients:
+        n_i = client_metrics[cid]["num_samples"]
+        sizes.append(n_i)
+        if n_i == 0:
+            n_i = 1.0
+        wupd = {k: v * float(n_i) for k, v in model_updates[cid].items()}
+        weighted_updates[cid] = wupd
+
+    total_samples = float(sum(sizes)) if sum(sizes) > 0 else float(len(participating_clients))
+
     encrypted_updates = encrypt_client_updates(
-        model_updates=model_updates,
+        model_updates=weighted_updates,
         participating=participating_clients,
         round_num=round_num,
         global_seed=server_seed if server_seed is not None else 0,
-        dp_sigma=0.0,  # DP already applied above
+        dp_sigma=0.0,  # DP already applied
         mask_scale=mask_scale,
-        device="cpu"
+        device="cpu",
     )
-    
-    # ---------- Server recovers only aggregate (masks cancel) ----------
-    agg_delta = recover_aggregate_from_encrypted(
+
+    # ---- Server recovers aggregate (masks cancel) ----
+    agg_sum = recover_aggregate_from_encrypted(
         enc_updates=encrypted_updates,
         participating=participating_clients,
         round_num=round_num,
         global_seed=server_seed if server_seed is not None else 0,
-        device="cpu"
+        device="cpu",
     )
-    
-    # The recovered agg_delta is the SUM of client updates (plus any DP noise).
-    # Convert to weighted average using client sample sizes
-    sizes = [client_metrics[cid]["num_samples"] for cid in participating_clients]
-    total_samples = float(sum(sizes)) if sum(sizes) > 0 else float(len(participating_clients))
-    # Weighted average: for consistency with original code (weighted by samples)
-    for k in agg_delta.keys():
-        # If dp_noise present, it's already part of agg_delta
-        # Divide by total samples proportionally: compute weighted average by per-client sample fractions
-        # Simple approach: since masks cancelled and we summed raw updates, scale by 1/total_samples to get mean-per-sample delta
-        agg_delta[k] = agg_delta[k] / total_samples
-    
-    # ---------- Global evaluation ----------
+
+    # Compute averaged delta
+    agg_delta = {k: (s / total_samples).cpu().float().clone() for k, s in agg_sum.items()}
+
+    # ---- Optional: global eval ----
     global_accuracy = None
     global_loss = None
     if callable(global_eval_fn):
@@ -540,6 +546,7 @@ def run_fed_round_with_capture(
         "server_aggregate_delta": agg_delta,
         "config_snapshot": config_snapshot,
     }
+
 
 # ## Save Exports
 import json
@@ -628,7 +635,7 @@ if __name__ == "__main__":
         # Run round with capture
         # Extend training_meta to include DP parameters (tune these!)
         training_meta = {"dataset": CONFIG["dataset"], "alpha": CONFIG["alpha"],
-                         "clip_norm": 1.0, "dp_sigma": 0.5, "mask_scale": 1.0}
+                         "clip_norm": 1.0, "dp_sigma": 0.0, "mask_scale": 1.0}
         
         metrics = run_fed_round_with_capture(
             round_num=round_num,
@@ -649,13 +656,19 @@ if __name__ == "__main__":
         
         # Apply aggregated update to global model
         current_state = global_model.state_dict()
+        param_names = set(n for n, _ in global_model.named_parameters())
         new_state = {}
+        agg_delta = metrics["server_aggregate_delta"] or {}
+
         for k in current_state.keys():
-            if k in metrics["server_aggregate_delta"]:
-                new_state[k] = current_state[k] + metrics["server_aggregate_delta"][k].to(device)
+            if k in param_names and k in agg_delta:
+                # apply only to parameter tensors
+                new_state[k] = current_state[k] + agg_delta[k].to(device)
             else:
+                # copy buffers unchanged (e.g., running_mean / running_var)
                 new_state[k] = current_state[k]
         global_model.load_state_dict(new_state)
+
         
         # Print metrics
         print(f"   Clients: {participating}")
