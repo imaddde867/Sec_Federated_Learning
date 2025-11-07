@@ -668,7 +668,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         return arr_float
     
     def encrypt_tensor(self, tensor: Union[torch.Tensor, np.ndarray]) -> Dict[str, Any]:
-        """Encrypt tensor using TenSEAL BFV"""
+        """Encrypt tensor using TenSEAL BFV with automatic chunking for large tensors"""
         if not self.enabled:
             return {"data": tensor, "encrypted": False}
         
@@ -676,35 +676,83 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             return self._fallback.encrypt_tensor(tensor)
         
         arr_int = self._to_numpy(tensor)
-        flat = arr_int.ravel().tolist()
+        flat = arr_int.ravel()
+        max_slots = self.poly_modulus_degree  # BFV can fit poly_modulus_degree values
         
-        try:
-            start_time = time.perf_counter()
-            encrypted_vector = ts.bfv_vector(self.context, flat)
-            enc_time = time.perf_counter() - start_time
+        # Check if we need to chunk
+        if len(flat) > max_slots:
+            # Chunk the tensor and encrypt each chunk
+            chunks = []
+            num_chunks = (len(flat) + max_slots - 1) // max_slots
             
-            serialized = encrypted_vector.serialize()
-            del encrypted_vector  # Free memory immediately
-            gc.collect()
+            start_time = time.perf_counter()
+            for i in range(num_chunks):
+                start_idx = i * max_slots
+                end_idx = min((i + 1) * max_slots, len(flat))
+                chunk = flat[start_idx:end_idx].tolist()
+                
+                # Pad to max_slots if needed (for last chunk)
+                if len(chunk) < max_slots:
+                    chunk.extend([0] * (max_slots - len(chunk)))
+                
+                encrypted_chunk = ts.bfv_vector(self.context, chunk)
+                serialized_chunk = encrypted_chunk.serialize()
+                chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
+                del encrypted_chunk, serialized_chunk  # Free memory immediately
+            
+            enc_time = time.perf_counter() - start_time
+            gc.collect()  # Force garbage collection after chunking
             
             self.metrics["encryption_time"] += enc_time
             self.metrics["num_encryptions"] += 1
-            self.metrics["total_encrypted_bytes"] += len(serialized)
+            self.metrics["total_encrypted_bytes"] += sum(len(c.encode('ascii')) for c in chunks)
             
             return {
                 "encrypted": True,
                 "scheme": "BFV",
-                "data": base64.b64encode(serialized).decode('ascii'),
+                "chunked": True,
+                "data": chunks,  # List of base64-encoded chunks
                 "shape": list(arr_int.shape),
                 "dtype": "int64",
                 "scale_factor": 1e6,
+                "num_chunks": num_chunks,
+                "chunk_size": max_slots,
             }
-        except Exception as e:
-            logger.error(f"TenSEAL BFV encryption failed: {e}, falling back to mock")
-            return self._fallback.encrypt_tensor(tensor)
+        else:
+            # Single chunk - original behavior
+            flat_list = flat.tolist()
+            # Pad to max_slots for efficiency
+            if len(flat_list) < max_slots:
+                flat_list.extend([0] * (max_slots - len(flat_list)))
+            
+            try:
+                start_time = time.perf_counter()
+                encrypted_vector = ts.bfv_vector(self.context, flat_list)
+                enc_time = time.perf_counter() - start_time
+                
+                serialized = encrypted_vector.serialize()
+                del encrypted_vector  # Free memory immediately
+                gc.collect()
+                
+                self.metrics["encryption_time"] += enc_time
+                self.metrics["num_encryptions"] += 1
+                self.metrics["total_encrypted_bytes"] += len(serialized)
+                
+                return {
+                    "encrypted": True,
+                    "scheme": "BFV",
+                    "chunked": False,
+                    "data": base64.b64encode(serialized).decode('ascii'),
+                    "shape": list(arr_int.shape),
+                    "dtype": "int64",
+                    "scale_factor": 1e6,
+                }
+            except Exception as e:
+                logger.error(f"TenSEAL BFV encryption failed: {e}, falling back to mock")
+                return self._fallback.encrypt_tensor(tensor)
     
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
-        """Decrypt tensor using TenSEAL BFV"""
+        """Decrypt tensor using TenSEAL BFV, handling chunked tensors"""
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
@@ -712,22 +760,47 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             return self._fallback.decrypt_tensor(encrypted, shape, dtype)
         
         try:
-            serialized = base64.b64decode(encrypted["data"])
             start_time = time.perf_counter()
-            encrypted_vector = ts.bfv_vector_from(self.context, serialized)
-            # Use secret key for decryption (context is public, so secret key is separate)
-            decrypted = encrypted_vector.decrypt(secret_key=self.secret_key)
-            del encrypted_vector  # Free memory immediately
+            
+            # Handle chunked encryption
+            if encrypted.get("chunked", False):
+                chunks = encrypted["data"]  # List of base64-encoded chunks
+                decrypted_parts = []
+                original_shape = tuple(encrypted.get("shape", shape or (1,)))
+                total_elements = int(np.prod(original_shape))
+                
+                for chunk_data in chunks:
+                    serialized = base64.b64decode(chunk_data)
+                    encrypted_vector = ts.bfv_vector_from(self.context, serialized)
+                    # Use secret key for decryption (context is public, so secret key is separate)
+                    decrypted_chunk = encrypted_vector.decrypt(secret_key=self.secret_key)
+                    decrypted_parts.extend(decrypted_chunk[:min(len(decrypted_chunk), total_elements - len(decrypted_parts))])
+                    del encrypted_vector, decrypted_chunk  # Free memory immediately
+                
+                arr_int = np.array(decrypted_parts[:total_elements], dtype=np.int64)
+                arr_int = arr_int.reshape(original_shape)
+                del decrypted_parts  # Free intermediate list
+                gc.collect()
+            else:
+                # Single chunk
+                serialized = base64.b64decode(encrypted["data"])
+                encrypted_vector = ts.bfv_vector_from(self.context, serialized)
+                # Use secret key for decryption (context is public, so secret key is separate)
+                decrypted = encrypted_vector.decrypt(secret_key=self.secret_key)
+                del encrypted_vector  # Free memory immediately
+                
+                arr_int = np.array(decrypted, dtype=np.int64)
+                del decrypted  # Free decrypted list
+                shape = tuple(encrypted.get("shape", shape or (len(arr_int),)))
+                # Remove padding if present
+                total_elements = int(np.prod(shape))
+                arr_int = arr_int[:total_elements].reshape(shape)
+                gc.collect()
+            
             dec_time = time.perf_counter() - start_time
             
             self.metrics["decryption_time"] += dec_time
             self.metrics["num_decryptions"] += 1
-            
-            arr_int = np.array(decrypted, dtype=np.int64)
-            del decrypted  # Free decrypted list
-            shape = tuple(encrypted.get("shape", shape or (len(arr_int),)))
-            arr_int = arr_int.reshape(shape)
-            gc.collect()
             
             return self._from_numpy(arr_int)
         except Exception as e:
@@ -778,6 +851,70 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                 encrypted_vectors = []
                 valid_weights = []
                 
+                # Check if we're dealing with chunked tensors
+                first_enc = None
+                for enc_dict in encrypted_list:
+                    if key in enc_dict and enc_dict[key].get("encrypted"):
+                        first_enc = enc_dict[key]
+                        break
+                
+                if first_enc is None:
+                    continue
+                
+                is_chunked = first_enc.get("chunked", False)
+                
+                if is_chunked:
+                    # Handle chunked aggregation - aggregate each chunk separately
+                    num_chunks = first_enc.get("num_chunks", 1)
+                    aggregated_chunks = []
+                    
+                    for chunk_idx in range(num_chunks):
+                        chunk_vectors = []
+                        chunk_weights = []
+                        
+                        for enc_dict, weight in zip(encrypted_list, weights):
+                            if key in enc_dict and enc_dict[key].get("encrypted"):
+                                chunk_data = enc_dict[key]["data"][chunk_idx]  # List of chunks
+                                serialized = base64.b64decode(chunk_data)
+                                vec = ts.bfv_vector_from(self.context, serialized)
+                                chunk_vectors.append(vec)
+                                # BFV requires integer weights, scale them
+                                chunk_weights.append(int(weight * 1e6))
+                                del serialized  # Free serialized data
+                        
+                        if chunk_vectors:
+                            # Aggregate this chunk
+                            chunk_result = None
+                            for vec, weight_int in zip(chunk_vectors, chunk_weights):
+                                weighted = vec * weight_int
+                                if chunk_result is None:
+                                    chunk_result = weighted
+                                else:
+                                    chunk_result += weighted
+                                del weighted  # Free intermediate
+                            
+                            serialized_chunk = chunk_result.serialize()
+                            aggregated_chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
+                            # Aggressive cleanup
+                            for v in chunk_vectors:
+                                del v
+                            del chunk_vectors, chunk_result
+                            gc.collect()
+                    
+                    aggregated[key] = {
+                        "encrypted": True,
+                        "scheme": "BFV",
+                        "chunked": True,
+                        "data": aggregated_chunks,
+                        "shape": first_enc.get("shape"),
+                        "dtype": "int64",
+                        "scale_factor": 1e6,
+                        "num_chunks": num_chunks,
+                        "chunk_size": first_enc.get("chunk_size"),
+                    }
+                    continue
+                
+                # Non-chunked aggregation (original code)
                 for enc_dict, weight in zip(encrypted_list, weights):
                     if key in enc_dict and enc_dict[key].get("encrypted"):
                         serialized = base64.b64decode(enc_dict[key]["data"])
@@ -809,11 +946,11 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                     aggregated[key] = {
                         "encrypted": True,
                         "scheme": "BFV",
+                        "chunked": False,
                         "data": base64.b64encode(serialized_result).decode('ascii'),
                         "shape": encrypted_list[0][key].get("shape"),
                         "dtype": "int64",
                         "scale_factor": 1e6,
-                        "weight_sum": sum(valid_weights) if 'valid_weights' in locals() else 0,
                     }
             except Exception as e:
                 logger.error(f"TenSEAL BFV aggregation failed for key {key}: {e}")
