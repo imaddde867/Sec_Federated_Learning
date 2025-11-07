@@ -359,27 +359,27 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                 flat_list.extend([0.0] * (max_slots - len(flat_list)))
             
             try:
-            start_time = time.perf_counter()
-            encrypted_vector = ts.ckks_vector(self.context, flat_list)
-            enc_time = time.perf_counter() - start_time
-            
-            # Serialize immediately and delete vector to free memory
-            serialized = encrypted_vector.serialize()
-            del encrypted_vector  # Free memory immediately
-            gc.collect()  # Force garbage collection
-            
-            self.metrics["encryption_time"] += enc_time
-            self.metrics["num_encryptions"] += 1
-            self.metrics["total_encrypted_bytes"] += len(serialized)
-            
-            return {
-                "encrypted": True,
-                "scheme": "CKKS",
-                "chunked": False,
-                "data": base64.b64encode(serialized).decode('ascii'),
-                "shape": list(arr.shape),
-                "dtype": "float32",
-            }
+                start_time = time.perf_counter()
+                encrypted_vector = ts.ckks_vector(self.context, flat_list)
+                enc_time = time.perf_counter() - start_time
+                
+                # Serialize immediately and delete vector to free memory
+                serialized = encrypted_vector.serialize()
+                del encrypted_vector  # Free memory immediately
+                gc.collect()  # Force garbage collection
+                
+                self.metrics["encryption_time"] += enc_time
+                self.metrics["num_encryptions"] += 1
+                self.metrics["total_encrypted_bytes"] += len(serialized)
+                
+                return {
+                    "encrypted": True,
+                    "scheme": "CKKS",
+                    "chunked": False,
+                    "data": base64.b64encode(serialized).decode('ascii'),
+                    "shape": list(arr.shape),
+                    "dtype": "float32",
+                }
             except Exception as e:
                 logger.error(f"TenSEAL encryption failed: {e}, falling back to mock")
                 return self._fallback.encrypt_tensor(tensor)
