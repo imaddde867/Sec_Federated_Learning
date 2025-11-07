@@ -127,46 +127,39 @@ class MockHEAdapter(BaseHEAdapter):
     def _to_torch(self, arr: np.ndarray) -> torch.Tensor:
         """Convert to torch tensor"""
         if TORCH_AVAILABLE:
-            return torch.from_numpy(arr).float()
+            # Copy array to make it writable and avoid warnings
+            arr_copy = np.array(arr, copy=True)
+            return torch.from_numpy(arr_copy).float()
         return arr
     
     def encrypt_tensor(self, tensor: Union[torch.Tensor, np.ndarray]) -> Dict[str, Any]:
-        """Mock encryption: XOR with deterministic noise"""
+        """Mock encryption: Pass-through for testing (no actual encryption/noise)"""
         if not self.enabled:
             return {"data": tensor, "encrypted": False}
         
         arr = self._to_numpy(tensor)
-        flat = arr.ravel()
-        
-        # Generate deterministic "noise" based on data hash
-        data_hash = hashlib.sha256(flat.tobytes()).digest()[:16]
-        seed = int.from_bytes(data_hash, 'big') % (2**31)
-        rng = np.random.RandomState(seed=seed)
-        noise = rng.randn(*flat.shape).astype(np.float32) * 0.01
-        
-        # "Encrypt" by adding noise (simulating HE)
-        encrypted_flat = flat + noise
+        # For mock encryption, we just serialize the data without adding noise
+        # This allows testing the encryption/decryption pipeline without corrupting data
         
         start_time = time.perf_counter()
         self.metrics["encryption_time"] += time.perf_counter() - start_time
         self.metrics["num_encryptions"] += 1
-        self.metrics["total_encrypted_bytes"] += encrypted_flat.nbytes
+        self.metrics["total_encrypted_bytes"] += arr.nbytes
         
         return {
             "encrypted": True,
-            "data": base64.b64encode(encrypted_flat.tobytes()).decode('ascii'),
+            "data": base64.b64encode(arr.tobytes()).decode('ascii'),
             "shape": list(arr.shape),
             "dtype": "float32",
-            "noise_seed": seed,
         }
     
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
-        """Mock decryption"""
+        """Mock decryption: Reverses mock encryption"""
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
         data_bytes = base64.b64decode(encrypted["data"])
-        arr = np.frombuffer(data_bytes, dtype=np.float32)
+        arr = np.frombuffer(data_bytes, dtype=np.float32).copy()  # Copy to make writable
         shape = tuple(encrypted.get("shape", shape or (len(arr),)))
         arr = arr.reshape(shape)
         
@@ -298,7 +291,9 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
     def _to_torch(self, arr: np.ndarray) -> torch.Tensor:
         """Convert to torch tensor"""
         if TORCH_AVAILABLE:
-            return torch.from_numpy(arr).float()
+            # Copy array to make it writable and avoid warnings
+            arr_copy = np.array(arr, copy=True)
+            return torch.from_numpy(arr_copy).float()
         return arr
     
     def encrypt_tensor(self, tensor: Union[torch.Tensor, np.ndarray]) -> Dict[str, Any]:
