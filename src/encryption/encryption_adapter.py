@@ -22,7 +22,7 @@ import copy
 import hashlib
 import base64
 import logging
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 import numpy as np
 
 # Optional dependencies
@@ -301,7 +301,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         return arr
     
     def encrypt_tensor(self, tensor: Union[torch.Tensor, np.ndarray]) -> Dict[str, Any]:
-        """Encrypt tensor using TenSEAL CKKS"""
+        """Encrypt tensor using TenSEAL CKKS with automatic chunking for large tensors"""
         if not self.enabled:
             return {"data": tensor, "encrypted": False}
         
@@ -309,33 +309,77 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             return self._fallback.encrypt_tensor(tensor)
         
         arr = self._to_numpy(tensor)
-        flat = arr.ravel().tolist()
+        flat = arr.ravel()
+        max_slots = self.poly_modulus_degree // 2  # CKKS can encrypt poly_modulus_degree/2 values
         
-        try:
-            start_time = time.perf_counter()
-            encrypted_vector = ts.ckks_vector(self.context, flat)
-            enc_time = time.perf_counter() - start_time
+        # Check if we need to chunk
+        if len(flat) > max_slots:
+            # Chunk the tensor and encrypt each chunk
+            chunks = []
+            num_chunks = (len(flat) + max_slots - 1) // max_slots
             
-            # Serialize
-            serialized = encrypted_vector.serialize()
+            start_time = time.perf_counter()
+            for i in range(num_chunks):
+                start_idx = i * max_slots
+                end_idx = min((i + 1) * max_slots, len(flat))
+                chunk = flat[start_idx:end_idx].tolist()
+                
+                # Pad to max_slots if needed (for last chunk)
+                if len(chunk) < max_slots:
+                    chunk.extend([0.0] * (max_slots - len(chunk)))
+                
+                encrypted_chunk = ts.ckks_vector(self.context, chunk)
+                chunks.append(base64.b64encode(encrypted_chunk.serialize()).decode('ascii'))
+            
+            enc_time = time.perf_counter() - start_time
             
             self.metrics["encryption_time"] += enc_time
             self.metrics["num_encryptions"] += 1
-            self.metrics["total_encrypted_bytes"] += len(serialized)
+            self.metrics["total_encrypted_bytes"] += sum(len(c.encode('ascii')) for c in chunks)
             
             return {
                 "encrypted": True,
                 "scheme": "CKKS",
-                "data": base64.b64encode(serialized).decode('ascii'),
+                "chunked": True,
+                "data": chunks,  # List of base64-encoded chunks
                 "shape": list(arr.shape),
                 "dtype": "float32",
+                "num_chunks": num_chunks,
+                "chunk_size": max_slots,
             }
-        except Exception as e:
-            logger.error(f"TenSEAL encryption failed: {e}, falling back to mock")
-            return self._fallback.encrypt_tensor(tensor)
+        else:
+            # Single chunk - original behavior
+            flat_list = flat.tolist()
+            # Pad to max_slots for efficiency
+            if len(flat_list) < max_slots:
+                flat_list.extend([0.0] * (max_slots - len(flat_list)))
+            
+            try:
+                start_time = time.perf_counter()
+                encrypted_vector = ts.ckks_vector(self.context, flat_list)
+                enc_time = time.perf_counter() - start_time
+                
+                # Serialize
+                serialized = encrypted_vector.serialize()
+                
+                self.metrics["encryption_time"] += enc_time
+                self.metrics["num_encryptions"] += 1
+                self.metrics["total_encrypted_bytes"] += len(serialized)
+                
+                return {
+                    "encrypted": True,
+                    "scheme": "CKKS",
+                    "chunked": False,
+                    "data": base64.b64encode(serialized).decode('ascii'),
+                    "shape": list(arr.shape),
+                    "dtype": "float32",
+                }
+            except Exception as e:
+                logger.error(f"TenSEAL encryption failed: {e}, falling back to mock")
+                return self._fallback.encrypt_tensor(tensor)
     
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
-        """Decrypt tensor using TenSEAL CKKS"""
+        """Decrypt tensor using TenSEAL CKKS, handling chunked tensors"""
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
@@ -343,18 +387,39 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             return self._fallback.decrypt_tensor(encrypted, shape, dtype)
         
         try:
-            serialized = base64.b64decode(encrypted["data"])
             start_time = time.perf_counter()
-            encrypted_vector = ts.ckks_vector_from(self.context, serialized)
-            decrypted = encrypted_vector.decrypt()
+            
+            # Handle chunked encryption
+            if encrypted.get("chunked", False):
+                chunks = encrypted["data"]  # List of base64-encoded chunks
+                decrypted_parts = []
+                original_shape = tuple(encrypted.get("shape", shape or (1,)))
+                total_elements = int(np.prod(original_shape))
+                
+                for chunk_data in chunks:
+                    serialized = base64.b64decode(chunk_data)
+                    encrypted_vector = ts.ckks_vector_from(self.context, serialized)
+                    decrypted_chunk = encrypted_vector.decrypt()
+                    decrypted_parts.extend(decrypted_chunk[:min(len(decrypted_chunk), total_elements - len(decrypted_parts))])
+                
+                arr = np.array(decrypted_parts[:total_elements], dtype=np.float32)
+                arr = arr.reshape(original_shape)
+            else:
+                # Single chunk
+                serialized = base64.b64decode(encrypted["data"])
+                encrypted_vector = ts.ckks_vector_from(self.context, serialized)
+                decrypted = encrypted_vector.decrypt()
+                
+                arr = np.array(decrypted, dtype=np.float32)
+                original_shape = tuple(encrypted.get("shape", shape or (len(arr),)))
+                # Remove padding if present
+                total_elements = int(np.prod(original_shape))
+                arr = arr[:total_elements].reshape(original_shape)
+            
             dec_time = time.perf_counter() - start_time
             
             self.metrics["decryption_time"] += dec_time
             self.metrics["num_decryptions"] += 1
-            
-            arr = np.array(decrypted, dtype=np.float32)
-            shape = tuple(encrypted.get("shape", shape or (len(arr),)))
-            arr = arr.reshape(shape)
             
             return self._to_torch(arr)
         except Exception as e:
@@ -405,6 +470,62 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                 encrypted_vectors = []
                 valid_weights = []
                 
+                # Check if we're dealing with chunked tensors
+                first_enc = None
+                for enc_dict in encrypted_list:
+                    if key in enc_dict and enc_dict[key].get("encrypted"):
+                        first_enc = enc_dict[key]
+                        break
+                
+                if first_enc is None:
+                    continue
+                
+                is_chunked = first_enc.get("chunked", False)
+                
+                if is_chunked:
+                    # Handle chunked aggregation - aggregate each chunk separately
+                    num_chunks = first_enc.get("num_chunks", 1)
+                    aggregated_chunks = []
+                    
+                    for chunk_idx in range(num_chunks):
+                        chunk_vectors = []
+                        chunk_weights = []
+                        
+                        for enc_dict, weight in zip(encrypted_list, weights):
+                            if key in enc_dict and enc_dict[key].get("encrypted"):
+                                chunk_data = enc_dict[key]["data"][chunk_idx]  # List of chunks
+                                serialized = base64.b64decode(chunk_data)
+                                vec = ts.ckks_vector_from(self.context, serialized)
+                                chunk_vectors.append(vec)
+                                chunk_weights.append(weight)
+                        
+                        if chunk_vectors:
+                            # Aggregate this chunk
+                            chunk_result = None
+                            for vec, weight in zip(chunk_vectors, chunk_weights):
+                                weighted = vec * weight
+                                if chunk_result is None:
+                                    chunk_result = weighted
+                                else:
+                                    chunk_result += weighted
+                            
+                            serialized_chunk = chunk_result.serialize()
+                            aggregated_chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
+                            del chunk_vectors, chunk_result
+                    
+                    aggregated[key] = {
+                        "encrypted": True,
+                        "scheme": "CKKS",
+                        "chunked": True,
+                        "data": aggregated_chunks,
+                        "shape": first_enc.get("shape"),
+                        "dtype": "float32",
+                        "num_chunks": num_chunks,
+                        "chunk_size": first_enc.get("chunk_size"),
+                    }
+                    continue
+                
+                # Non-chunked aggregation (original code)
                 for enc_dict, weight in zip(encrypted_list, weights):
                     if key in enc_dict and enc_dict[key].get("encrypted"):
                         serialized = base64.b64decode(enc_dict[key]["data"])
@@ -422,13 +543,22 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                         else:
                             result += weighted
                     
-                    # Serialize result
+                    # Serialize result and clean up memory
                     serialized_result = result.serialize()
+                    # Explicitly delete vectors to free memory
+                    del encrypted_vectors
+                    del result
+                    
+                    # Check if original was chunked
+                    first_enc = encrypted_list[0][key]
+                    is_chunked = first_enc.get("chunked", False)
+                    
                     aggregated[key] = {
                         "encrypted": True,
                         "scheme": "CKKS",
+                        "chunked": is_chunked,
                         "data": base64.b64encode(serialized_result).decode('ascii'),
-                        "shape": encrypted_list[0][key].get("shape"),
+                        "shape": first_enc.get("shape"),
                         "dtype": "float32",
                     }
             except Exception as e:
@@ -662,6 +792,12 @@ class SelectiveEncryptionAdapter:
     """
     Main adapter that provides selective encryption for federated learning.
     Supports multiple HE schemes and selective layer encryption.
+    
+    Enhanced with features from best practices:
+    - Flexible layer selection with name_filter callback
+    - Metadata preservation (shape, dtype, device)
+    - Option to drop plaintext when encrypted for security
+    - Serialize/deserialize hooks for wire/storage format
     """
     
     def __init__(self, 
@@ -670,6 +806,8 @@ class SelectiveEncryptionAdapter:
                  encrypt_communication: bool = True,
                  encrypt_gradients: bool = False,
                  encrypt_updates: bool = True,
+                 name_filter: Optional[Callable[[str], bool]] = None,
+                 drop_plaintext_when_encrypted: bool = False,
                  **he_kwargs):
         """
         Initialize selective encryption adapter.
@@ -680,6 +818,8 @@ class SelectiveEncryptionAdapter:
             encrypt_communication: Whether to encrypt client-server communication
             encrypt_gradients: Whether to encrypt gradients during training
             encrypt_updates: Whether to encrypt model updates
+            name_filter: Optional callback function for additional layer filtering (param_name -> bool)
+            drop_plaintext_when_encrypted: If True, don't include plaintext when encrypted (security)
             **he_kwargs: Additional arguments for HE adapters
         """
         self.layers_to_encrypt = layers_to_encrypt or []
@@ -687,6 +827,8 @@ class SelectiveEncryptionAdapter:
         self.encrypt_communication = encrypt_communication
         self.encrypt_gradients = encrypt_gradients
         self.encrypt_updates = encrypt_updates
+        self.name_filter = name_filter
+        self.drop_plaintext_when_encrypted = drop_plaintext_when_encrypted
         
         # Initialize appropriate HE adapter
         if self.encryption_method == "ckks":
@@ -699,45 +841,155 @@ class SelectiveEncryptionAdapter:
             logger.warning(f"Unknown encryption method {encryption_method}, using mock")
             self.he_adapter = MockHEAdapter(enabled=True, **he_kwargs)
         
-        self.enabled = True
+        self.enabled = len(self.layers_to_encrypt) > 0 or name_filter is not None
         logger.info(f"Initialized SelectiveEncryptionAdapter with method={encryption_method}, "
                    f"layers={layers_to_encrypt}, comm={encrypt_communication}")
     
-    def _should_encrypt_layer(self, layer_name: str) -> bool:
-        """Check if a layer should be encrypted"""
-        if not self.layers_to_encrypt:
-            return True  # Encrypt all if no specific layers specified
+    def _wrap_entry(self, 
+                   data: Union[torch.Tensor, np.ndarray, Any],
+                   encrypted: bool,
+                   scheme: str = "none",
+                   meta: Optional[dict] = None) -> dict:
+        """
+        Wrap data in a consistent entry format with metadata.
+        Inspired by friend's cleaner structure.
+        """
+        meta = meta or {}
         
-        for pattern in self.layers_to_encrypt:
-            if pattern in layer_name or layer_name.startswith(pattern):
-                return True
-        return False
+        # Extract tensor metadata
+        if TORCH_AVAILABLE and isinstance(data, torch.Tensor):
+            original_shape = tuple(data.shape)
+            dtype = str(data.dtype)
+            device = str(data.device)
+            # Clone to avoid reference issues
+            tensor_data = data.detach().clone()
+        elif isinstance(data, np.ndarray):
+            original_shape = tuple(data.shape)
+            dtype = str(data.dtype)
+            device = "cpu"
+            tensor_data = data.copy()
+        else:
+            original_shape = None
+            dtype = None
+            device = None
+            tensor_data = data
+        
+        entry = {
+            "encrypted": encrypted,
+            "scheme": scheme,  # 'none' | 'ckks' | 'bfv' | 'mock'
+            "data": tensor_data,
+            "original_shape": original_shape,
+            "dtype": dtype,
+            "device": device,
+        }
+        
+        if meta:
+            entry["meta"] = dict(meta)
+        
+        return entry
+    
+    def _should_encrypt_layer(self, layer_name: str) -> bool:
+        """Check if a layer should be encrypted (with optional name_filter)"""
+        if not self.enabled:
+            return False
+        
+        # Check layer patterns
+        layer_hit = False
+        if not self.layers_to_encrypt:
+            layer_hit = True  # Encrypt all if no specific layers specified
+        else:
+            for pattern in self.layers_to_encrypt:
+                if pattern in layer_name or layer_name.startswith(pattern):
+                    layer_hit = True
+                    break
+        
+        # Apply additional name filter if provided
+        if layer_hit and self.name_filter is not None:
+            layer_hit = layer_hit and bool(self.name_filter(layer_name))
+        
+        return layer_hit
+    
+    def serialize(self, entry: dict) -> dict:
+        """Serialize entry for wire/storage format. Override for custom serialization."""
+        return entry
+    
+    def deserialize(self, entry: dict) -> dict:
+        """Deserialize entry from wire/storage format. Override for custom deserialization."""
+        return entry
     
     def encrypt_gradients(self, gradients: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
-        """Encrypt gradients (selective by layer)"""
+        """Encrypt gradients (selective by layer) with metadata preservation"""
         if not self.enabled or not self.encrypt_gradients:
-            return gradients
+            # Return wrapped entries even when encryption is disabled
+            out = {}
+            for name, grad in gradients.items():
+                entry = self._wrap_entry(grad, encrypted=False, scheme="none")
+                out[name] = self.serialize(entry)
+            return out
         
         encrypted = {}
         for layer_name, grad in gradients.items():
             if self._should_encrypt_layer(layer_name):
-                encrypted[layer_name] = self.he_adapter.encrypt_tensor(grad)
+                # Encrypt using HE adapter
+                enc_result = self.he_adapter.encrypt_tensor(grad)
+                
+                # Wrap in consistent format
+                entry = self._wrap_entry(
+                    enc_result.get("data") if isinstance(enc_result, dict) else enc_result,
+                    encrypted=True,
+                    scheme=self.encryption_method,
+                    meta={"he_metadata": enc_result} if isinstance(enc_result, dict) else None
+                )
+                
+                # If drop_plaintext is True, remove plaintext data
+                if self.drop_plaintext_when_encrypted and isinstance(enc_result, dict):
+                    entry["data"] = None  # Plaintext removed for security
+                    entry["he_metadata"] = enc_result  # Keep HE metadata
+                
+                encrypted[layer_name] = self.serialize(entry)
+                if entry["encrypted"]:
+                    logger.debug(f"Encrypted grad: {layer_name} [{entry['scheme']}]")
             else:
-                encrypted[layer_name] = grad
+                entry = self._wrap_entry(grad, encrypted=False, scheme="none")
+                encrypted[layer_name] = self.serialize(entry)
         
         return encrypted
     
     def encrypt_update(self, update: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
-        """Encrypt model update (selective by layer)"""
+        """Encrypt model update (selective by layer) with metadata preservation"""
         if not self.enabled or not self.encrypt_updates:
-            return update
+            # Return wrapped entries even when encryption is disabled
+            out = {}
+            for name, tensor in update.items():
+                entry = self._wrap_entry(tensor, encrypted=False, scheme="none")
+                out[name] = self.serialize(entry)
+            return out
         
         encrypted = {}
         for layer_name, tensor in update.items():
             if self._should_encrypt_layer(layer_name):
-                encrypted[layer_name] = self.he_adapter.encrypt_tensor(tensor)
+                # Encrypt using HE adapter
+                enc_result = self.he_adapter.encrypt_tensor(tensor)
+                
+                # Wrap in consistent format
+                entry = self._wrap_entry(
+                    enc_result.get("data") if isinstance(enc_result, dict) else enc_result,
+                    encrypted=True,
+                    scheme=self.encryption_method,
+                    meta={"he_metadata": enc_result} if isinstance(enc_result, dict) else None
+                )
+                
+                # If drop_plaintext is True, remove plaintext data
+                if self.drop_plaintext_when_encrypted and isinstance(enc_result, dict):
+                    entry["data"] = None  # Plaintext removed for security
+                    entry["he_metadata"] = enc_result  # Keep HE metadata
+                
+                encrypted[layer_name] = self.serialize(entry)
+                if entry["encrypted"]:
+                    logger.debug(f"Encrypted update: {layer_name} [{entry['scheme']}]")
             else:
-                encrypted[layer_name] = tensor
+                entry = self._wrap_entry(tensor, encrypted=False, scheme="none")
+                encrypted[layer_name] = self.serialize(entry)
         
         return encrypted
     
@@ -749,20 +1001,193 @@ class SelectiveEncryptionAdapter:
         return self.he_adapter.encrypt_dict(data)
     
     def decrypt_communication(self, encrypted_data: Dict[str, Any]) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
-        """Decrypt data from client-server communication"""
+        """
+        Decrypt data from client-server communication.
+        Handles both wrapped entry format and direct HE format.
+        """
         if not self.enabled or not self.encrypt_communication:
-            return encrypted_data
+            # If not encrypted, extract data from wrapped format if needed
+            result = {}
+            for key, entry in encrypted_data.items():
+                if isinstance(entry, dict) and "data" in entry and not entry.get("encrypted"):
+                    result[key] = entry["data"]
+                else:
+                    result[key] = entry
+            return result
         
-        return self.he_adapter.decrypt_dict(encrypted_data)
+        # Check if wrapped format
+        if encrypted_data:
+            first_entry = next(iter(encrypted_data.values()))
+            is_wrapped = isinstance(first_entry, dict) and "encrypted" in first_entry and "scheme" in first_entry
+            
+            if is_wrapped:
+                # Extract HE metadata from wrapped entries
+                he_dict = {}
+                for key, entry in encrypted_data.items():
+                    if isinstance(entry, dict) and entry.get("encrypted"):
+                        if "meta" in entry and "he_metadata" in entry["meta"]:
+                            he_dict[key] = entry["meta"]["he_metadata"]
+                        elif isinstance(entry.get("data"), dict) and entry["data"].get("encrypted"):
+                            he_dict[key] = entry["data"]
+                        else:
+                            # Not actually encrypted, return data as-is
+                            he_dict[key] = entry.get("data")
+                    else:
+                        # Not encrypted, return data
+                        he_dict[key] = entry.get("data") if isinstance(entry, dict) else entry
+                
+                # Decrypt using HE adapter
+                decrypted = self.he_adapter.decrypt_dict(he_dict)
+                return decrypted
+            else:
+                # Direct format - pass through to HE adapter
+                return self.he_adapter.decrypt_dict(encrypted_data)
+        
+        return encrypted_data
     
     def aggregate_encrypted_updates(self, encrypted_updates: List[Dict[str, Any]], 
                                     weights: Optional[List[float]] = None) -> Dict[str, Any]:
-        """Aggregate multiple encrypted updates using homomorphic operations"""
+        """
+        Aggregate multiple encrypted updates using homomorphic operations.
+        Handles both wrapped entry format and direct HE format for backward compatibility.
+        """
         if not self.enabled:
             # Fallback to regular aggregation if encryption disabled
             return encrypted_updates[0] if encrypted_updates else {}
         
-        return self.he_adapter.aggregate_encrypted(encrypted_updates, weights)
+        # Check if we're using wrapped format (new) or direct format (old)
+        if not encrypted_updates:
+            return {}
+        
+        first_update = encrypted_updates[0]
+        first_key = next(iter(first_update.keys())) if first_update else None
+        
+        if first_key:
+            first_entry = first_update[first_key]
+            # Check if it's wrapped format (has "encrypted", "scheme", "data" at top level)
+            is_wrapped = isinstance(first_entry, dict) and "encrypted" in first_entry and "scheme" in first_entry
+            
+            if is_wrapped:
+                # Extract HE metadata from wrapped entries
+                he_updates = []
+                for enc_dict in encrypted_updates:
+                    he_dict = {}
+                    for key, entry in enc_dict.items():
+                        # Extract HE metadata from wrapped entry
+                        if isinstance(entry, dict) and entry.get("encrypted"):
+                            if "meta" in entry and "he_metadata" in entry["meta"]:
+                                he_dict[key] = entry["meta"]["he_metadata"]
+                            elif isinstance(entry.get("data"), dict) and entry["data"].get("encrypted"):
+                                he_dict[key] = entry["data"]
+                            else:
+                                # Not actually encrypted, skip
+                                continue
+                        else:
+                            # Not encrypted, skip
+                            continue
+                    if he_dict:
+                        he_updates.append(he_dict)
+                
+                if he_updates:
+                    # Aggregate using HE
+                    agg_result = self.he_adapter.aggregate_encrypted(he_updates, weights)
+                    # Return in wrapped format for consistency
+                    wrapped_result = {}
+                    for key, he_data in agg_result.items():
+                        wrapped_result[key] = self._wrap_entry(
+                            he_data.get("data") if isinstance(he_data, dict) else he_data,
+                            encrypted=True,
+                            scheme=self.encryption_method,
+                            meta={"he_metadata": he_data} if isinstance(he_data, dict) else None
+                        )
+                    return wrapped_result
+                else:
+                    # No encrypted entries, return first update
+                    return encrypted_updates[0]
+            else:
+                # Direct format (old) - pass through to HE adapter
+                return self.he_adapter.aggregate_encrypted(encrypted_updates, weights)
+        
+        return {}
+    
+    def decrypt_and_aggregate(self, encrypted_updates_list: List[Dict[str, Any]], 
+                             weights: Optional[List[float]] = None) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
+        """
+        Decrypt and aggregate encrypted updates in one operation.
+        Returns plaintext aggregated tensors.
+        Inspired by friend's cleaner API.
+        """
+        if not encrypted_updates_list:
+            return {}
+        
+        # Group by parameter name
+        grouped: Dict[str, List[dict]] = {}
+        for enc_dict in encrypted_updates_list:
+            for name, entry in enc_dict.items():
+                deserialized = self.deserialize(entry)
+                grouped.setdefault(name, []).append(deserialized)
+        
+        # Aggregate per-parameter
+        result: Dict[str, Union[torch.Tensor, np.ndarray]] = {}
+        for name, entries in grouped.items():
+            # Check if all entries are encrypted
+            all_encrypted = all(e.get("encrypted", False) for e in entries)
+            
+            if all_encrypted:
+                # Extract HE metadata and aggregate
+                he_entries = []
+                for e in entries:
+                    # Try to get HE metadata from wrapped entry
+                    if "meta" in e and "he_metadata" in e["meta"]:
+                        he_entries.append(e["meta"]["he_metadata"])
+                    elif isinstance(e.get("data"), dict) and e["data"].get("encrypted"):
+                        # Direct HE format (backward compatibility)
+                        he_entries.append(e["data"])
+                    elif e.get("encrypted") and "he_metadata" in e:
+                        # Alternative format
+                        he_entries.append(e["he_metadata"])
+                
+                if he_entries:
+                    # Use homomorphic aggregation
+                    agg_result = self.he_adapter.aggregate_encrypted(he_entries, weights)
+                    # Decrypt aggregated result - extract tensor from decrypted dict
+                    decrypted_dict = self.he_adapter.decrypt_dict(agg_result)
+                    # Get the tensor (should be only one key in decrypted_dict)
+                    if decrypted_dict:
+                        result[name] = next(iter(decrypted_dict.values()))
+                    else:
+                        result[name] = torch.tensor(0.0) if TORCH_AVAILABLE else np.array(0.0)
+                else:
+                    # Fallback - try to use data directly
+                    data = entries[0].get("data")
+                    if data is not None and (TORCH_AVAILABLE and isinstance(data, torch.Tensor) or isinstance(data, np.ndarray)):
+                        result[name] = data
+                    else:
+                        result[name] = torch.tensor(0.0) if TORCH_AVAILABLE else np.array(0.0)
+            else:
+                # Plaintext aggregation (mean)
+                acc = None
+                count = 0
+                for e in entries:
+                    data = e.get("data")
+                    if data is not None:
+                        if TORCH_AVAILABLE and isinstance(data, torch.Tensor):
+                            acc = data.clone() if acc is None else acc + data
+                        elif isinstance(data, np.ndarray):
+                            acc = data.copy() if acc is None else acc + data
+                        count += 1
+                
+                if acc is not None and count > 0:
+                    if TORCH_AVAILABLE and isinstance(acc, torch.Tensor):
+                        result[name] = acc / float(count)
+                    elif isinstance(acc, np.ndarray):
+                        result[name] = acc / float(count)
+                    else:
+                        result[name] = acc
+                else:
+                    result[name] = torch.tensor(0.0) if TORCH_AVAILABLE else np.array(0.0)
+        
+        return result
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get encryption performance metrics"""
