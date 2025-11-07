@@ -242,9 +242,11 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                  global_scale: float = 2**40, key: Optional[bytes] = None):
         super().__init__(enabled)
         
+        # Always create fallback for error handling
+        self._fallback = MockHEAdapter(enabled, key)
+        
         if not TENSEAL_AVAILABLE:
             logger.warning("TenSEAL not available, falling back to MockHEAdapter")
-            self._fallback = MockHEAdapter(enabled, key)
             self.tenseal_available = False
             return
         
@@ -260,7 +262,10 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         
         # Create context
         self.context = self._create_context()
-        self.context.make_context_public()  # Make public for operations
+        if self.context is not None:
+            # Save secret key before making context public (needed for decryption)
+            self.secret_key = self.context.secret_key()
+            self.context.make_context_public()  # Make public for operations
     
     def _create_context(self):
         """Create TenSEAL CKKS context"""
@@ -400,7 +405,8 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                 for chunk_data in chunks:
                     serialized = base64.b64decode(chunk_data)
                     encrypted_vector = ts.ckks_vector_from(self.context, serialized)
-                    decrypted_chunk = encrypted_vector.decrypt()
+                    # Use secret key for decryption (context is public, so secret key is separate)
+                    decrypted_chunk = encrypted_vector.decrypt(secret_key=self.secret_key)
                     decrypted_parts.extend(decrypted_chunk[:min(len(decrypted_chunk), total_elements - len(decrypted_parts))])
                     del encrypted_vector, decrypted_chunk  # Free memory immediately
                 
@@ -412,7 +418,8 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                 # Single chunk
                 serialized = base64.b64decode(encrypted["data"])
                 encrypted_vector = ts.ckks_vector_from(self.context, serialized)
-                decrypted = encrypted_vector.decrypt()
+                # Use secret key for decryption (context is public, so secret key is separate)
+                decrypted = encrypted_vector.decrypt(secret_key=self.secret_key)
                 del encrypted_vector  # Free memory immediately
                 
                 arr = np.array(decrypted, dtype=np.float32)
@@ -601,9 +608,11 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                  plain_modulus: int = 1032193, key: Optional[bytes] = None):
         super().__init__(enabled)
         
+        # Always create fallback for error handling
+        self._fallback = MockHEAdapter(enabled, key)
+        
         if not TENSEAL_AVAILABLE:
             logger.warning("TenSEAL not available, falling back to MockHEAdapter")
-            self._fallback = MockHEAdapter(enabled, key)
             self.tenseal_available = False
             return
         
@@ -616,7 +625,10 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         self.key = key
         
         self.context = self._create_context()
-        self.context.make_context_public()
+        if self.context is not None:
+            # Save secret key before making context public (needed for decryption)
+            self.secret_key = self.context.secret_key()
+            self.context.make_context_public()
     
     def _create_context(self):
         """Create TenSEAL BFV context"""
@@ -703,7 +715,8 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             serialized = base64.b64decode(encrypted["data"])
             start_time = time.perf_counter()
             encrypted_vector = ts.bfv_vector_from(self.context, serialized)
-            decrypted = encrypted_vector.decrypt()
+            # Use secret key for decryption (context is public, so secret key is separate)
+            decrypted = encrypted_vector.decrypt(secret_key=self.secret_key)
             del encrypted_vector  # Free memory immediately
             dec_time = time.perf_counter() - start_time
             
