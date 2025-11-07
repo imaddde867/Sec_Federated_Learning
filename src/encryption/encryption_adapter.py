@@ -22,6 +22,7 @@ import copy
 import hashlib
 import base64
 import logging
+import gc
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 import numpy as np
 
@@ -329,9 +330,12 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                     chunk.extend([0.0] * (max_slots - len(chunk)))
                 
                 encrypted_chunk = ts.ckks_vector(self.context, chunk)
-                chunks.append(base64.b64encode(encrypted_chunk.serialize()).decode('ascii'))
+                serialized_chunk = encrypted_chunk.serialize()
+                chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
+                del encrypted_chunk, serialized_chunk  # Free memory immediately
             
             enc_time = time.perf_counter() - start_time
+            gc.collect()  # Force garbage collection after chunking
             
             self.metrics["encryption_time"] += enc_time
             self.metrics["num_encryptions"] += 1
@@ -355,25 +359,27 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                 flat_list.extend([0.0] * (max_slots - len(flat_list)))
             
             try:
-                start_time = time.perf_counter()
-                encrypted_vector = ts.ckks_vector(self.context, flat_list)
-                enc_time = time.perf_counter() - start_time
-                
-                # Serialize
-                serialized = encrypted_vector.serialize()
-                
-                self.metrics["encryption_time"] += enc_time
-                self.metrics["num_encryptions"] += 1
-                self.metrics["total_encrypted_bytes"] += len(serialized)
-                
-                return {
-                    "encrypted": True,
-                    "scheme": "CKKS",
-                    "chunked": False,
-                    "data": base64.b64encode(serialized).decode('ascii'),
-                    "shape": list(arr.shape),
-                    "dtype": "float32",
-                }
+            start_time = time.perf_counter()
+            encrypted_vector = ts.ckks_vector(self.context, flat_list)
+            enc_time = time.perf_counter() - start_time
+            
+            # Serialize immediately and delete vector to free memory
+            serialized = encrypted_vector.serialize()
+            del encrypted_vector  # Free memory immediately
+            gc.collect()  # Force garbage collection
+            
+            self.metrics["encryption_time"] += enc_time
+            self.metrics["num_encryptions"] += 1
+            self.metrics["total_encrypted_bytes"] += len(serialized)
+            
+            return {
+                "encrypted": True,
+                "scheme": "CKKS",
+                "chunked": False,
+                "data": base64.b64encode(serialized).decode('ascii'),
+                "shape": list(arr.shape),
+                "dtype": "float32",
+            }
             except Exception as e:
                 logger.error(f"TenSEAL encryption failed: {e}, falling back to mock")
                 return self._fallback.encrypt_tensor(tensor)
@@ -401,20 +407,26 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                     encrypted_vector = ts.ckks_vector_from(self.context, serialized)
                     decrypted_chunk = encrypted_vector.decrypt()
                     decrypted_parts.extend(decrypted_chunk[:min(len(decrypted_chunk), total_elements - len(decrypted_parts))])
+                    del encrypted_vector, decrypted_chunk  # Free memory immediately
                 
                 arr = np.array(decrypted_parts[:total_elements], dtype=np.float32)
                 arr = arr.reshape(original_shape)
+                del decrypted_parts  # Free intermediate list
+                gc.collect()
             else:
                 # Single chunk
                 serialized = base64.b64decode(encrypted["data"])
                 encrypted_vector = ts.ckks_vector_from(self.context, serialized)
                 decrypted = encrypted_vector.decrypt()
+                del encrypted_vector  # Free memory immediately
                 
                 arr = np.array(decrypted, dtype=np.float32)
+                del decrypted  # Free decrypted list
                 original_shape = tuple(encrypted.get("shape", shape or (len(arr),)))
                 # Remove padding if present
                 total_elements = int(np.prod(original_shape))
                 arr = arr[:total_elements].reshape(original_shape)
+                gc.collect()
             
             dec_time = time.perf_counter() - start_time
             
@@ -511,7 +523,11 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                             
                             serialized_chunk = chunk_result.serialize()
                             aggregated_chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
-                            del chunk_vectors, chunk_result
+                            # Aggressive cleanup
+                            for v in chunk_vectors:
+                                del v
+                            del chunk_vectors, chunk_result, weighted
+                            gc.collect()
                     
                     aggregated[key] = {
                         "encrypted": True,
@@ -532,6 +548,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                         vec = ts.ckks_vector_from(self.context, serialized)
                         encrypted_vectors.append(vec)
                         valid_weights.append(weight)
+                        del serialized  # Free serialized data
                 
                 if encrypted_vectors:
                     # Homomorphic weighted sum
@@ -542,12 +559,15 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                             result = weighted
                         else:
                             result += weighted
+                        del weighted  # Free intermediate weighted vector
                     
-                    # Serialize result and clean up memory
+                    # Serialize result and clean up memory aggressively
                     serialized_result = result.serialize()
-                    # Explicitly delete vectors to free memory
-                    del encrypted_vectors
-                    del result
+                    # Explicitly delete all vectors to free memory
+                    for vec in encrypted_vectors:
+                        del vec
+                    del encrypted_vectors, result, valid_weights
+                    gc.collect()  # Force garbage collection
                     
                     # Check if original was chunked
                     first_enc = encrypted_list[0][key]
@@ -657,6 +677,8 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             enc_time = time.perf_counter() - start_time
             
             serialized = encrypted_vector.serialize()
+            del encrypted_vector  # Free memory immediately
+            gc.collect()
             
             self.metrics["encryption_time"] += enc_time
             self.metrics["num_encryptions"] += 1
@@ -687,14 +709,17 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             start_time = time.perf_counter()
             encrypted_vector = ts.bfv_vector_from(self.context, serialized)
             decrypted = encrypted_vector.decrypt()
+            del encrypted_vector  # Free memory immediately
             dec_time = time.perf_counter() - start_time
             
             self.metrics["decryption_time"] += dec_time
             self.metrics["num_decryptions"] += 1
             
             arr_int = np.array(decrypted, dtype=np.int64)
+            del decrypted  # Free decrypted list
             shape = tuple(encrypted.get("shape", shape or (len(arr_int),)))
             arr_int = arr_int.reshape(shape)
+            gc.collect()
             
             return self._from_numpy(arr_int)
         except Exception as e:
@@ -752,6 +777,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                         encrypted_vectors.append(vec)
                         # BFV requires integer weights, scale them
                         valid_weights.append(int(weight * 1e6))
+                        del serialized  # Free serialized data
                 
                 if encrypted_vectors:
                     result = None
@@ -761,10 +787,17 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                             result = weighted
                         else:
                             result += weighted
+                        del weighted  # Free intermediate
                     
                     # Normalize by number of clients (approximate division)
                     # In practice, you'd need to handle division differently in BFV
                     serialized_result = result.serialize()
+                    # Aggressive cleanup
+                    for vec in encrypted_vectors:
+                        del vec
+                    del encrypted_vectors, result, valid_weights
+                    gc.collect()
+                    
                     aggregated[key] = {
                         "encrypted": True,
                         "scheme": "BFV",
@@ -772,7 +805,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                         "shape": encrypted_list[0][key].get("shape"),
                         "dtype": "int64",
                         "scale_factor": 1e6,
-                        "weight_sum": sum(valid_weights),
+                        "weight_sum": sum(valid_weights) if 'valid_weights' in locals() else 0,
                     }
             except Exception as e:
                 logger.error(f"TenSEAL BFV aggregation failed for key {key}: {e}")
