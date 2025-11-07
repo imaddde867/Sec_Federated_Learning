@@ -36,7 +36,7 @@ CONFIG = {
     "num_clients": 5,
     "clients_per_round": 1,  # Partial participation
     "local_epochs": 1,
-    "local_batch_size": 32,
+    "local_batch_size": 1,  # Batch size 1 keeps per-sample gradients for inversion studies
 
     # Data
     "dataset": "CIFAR100",
@@ -52,7 +52,7 @@ CONFIG = {
     "weight_decay": 0.0,
 
     # Capture settings
-    "max_steps_to_store": 5,  # Capture at most 5 steps per client
+    "max_steps_to_store": 1,  # Capture only the first local step per client to limit memory
     # Set to 0 or False to disable gradient capture, or None to store every step (not recommended).
     "return_indices": False,
 
