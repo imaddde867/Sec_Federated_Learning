@@ -11,7 +11,6 @@ This repository contains a compact, configurable Federated Learning (FL) runner 
 - `src/core-safe/encryption_adapter.py`: HE adapters
   - Mock adapter (no real crypto) for fast testing.
   - TenSEAL CKKS/BFV adapters with chunking for large tensors and weighted aggregation; automatic fallback to mock if TenSEAL isn’t available.
-  - SelectiveEncryptionAdapter to encrypt specific layers, gradients, updates, or client‑server comms; exposes simple `encrypt_update` and `decrypt_and_aggregate` APIs and metrics.
 - `src/core-safe/dp_utils.py`: Minimal DP utilities (clip grads, add Gaussian noise). Not a full accountant; integrate Opacus later if needed.
 - `src/core-safe/run_experiment.py`: CLI to run FL experiments and emit metrics JSON.
 - `src/core-safe/enc_test.ipynb`: Notebook baseline for FedAvg with encryption configuration and telemetry capture.
@@ -67,8 +66,3 @@ python src/core-safe/run_experiment.py \
 ## Repository Pointers
 - `src/README.md` explains the workflow: keep stable code in `core-safe/`, experiment in personal subfolders, then upstream via PR.
 - `docs/` holds planning notes; `attacks/` contains scripts/utilities for evaluating leakage.
-
-## Requirements
-- Conda/Miniconda, Python 3.10+
-- PyTorch + torchvision (installed by setup scripts)
-- Optional: TenSEAL for CKKS/BFV
