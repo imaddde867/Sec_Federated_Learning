@@ -302,7 +302,43 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             return {"data": tensor, "encrypted": False}
         
         arr = self._to_numpy(tensor)
-    
+        shape = arr.shape
+        dtype = str(arr.dtype)
+        flat = arr.flatten()
+        chunk_size = self.poly_modulus_degree // 2
+        num_chunks = int(np.ceil(flat.size / chunk_size))
+        encrypted_chunks = []
+        chunk_shapes = []
+        start_time = time.perf_counter()
+        for i in range(num_chunks):
+            start = i * chunk_size
+            end = min((i + 1) * chunk_size, flat.size)
+            chunk = flat[start:end]
+            # Pad chunk if needed
+            if chunk.size < chunk_size:
+                pad_width = chunk_size - chunk.size
+                chunk = np.pad(chunk, (0, pad_width), mode='constant')
+            try:
+                enc_vec = ts.ckks_vector(self.context, chunk.tolist())
+                serialized = enc_vec.serialize()
+                # Optionally base64 encode for JSON safety
+                serialized_b64 = base64.b64encode(serialized).decode('utf-8')
+                encrypted_chunks.append(serialized_b64)
+                chunk_shapes.append(chunk.size)
+            except Exception as e:
+                raise EncryptionError(f"Failed to encrypt chunk {i}: {e}") from e
+        elapsed = time.perf_counter() - start_time
+        return {
+            "data": encrypted_chunks,
+            "encrypted": True,
+            "scheme": "CKKS",
+            "shape": shape,
+            "dtype": dtype,
+            "num_chunks": num_chunks,
+            "chunk_size": chunk_size,
+            "chunk_shapes": chunk_shapes,
+            "encryption_time": elapsed,
+        }
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
         """Decrypt tensor using TenSEAL CKKS, handling chunked tensors"""
         if not encrypted.get("encrypted", False):
