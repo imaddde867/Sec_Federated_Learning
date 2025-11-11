@@ -1002,9 +1002,10 @@ class SelectiveEncryptionAdapter:
         """
         self.layers_to_encrypt = layers_to_encrypt or []
         self.encryption_method = encryption_method.lower()
-        self.encrypt_communication = encrypt_communication
-        self.encrypt_gradients = encrypt_gradients
-        self.encrypt_updates = encrypt_updates
+        # Avoid name collisions with methods: store flags with _enabled suffixes
+        self.encrypt_communication_enabled = encrypt_communication
+        self.encrypt_gradients_enabled = encrypt_gradients
+        self.encrypt_updates_enabled = encrypt_updates
         self.name_filter = name_filter
         self.drop_plaintext_when_encrypted = drop_plaintext_when_encrypted
         
@@ -1097,7 +1098,7 @@ class SelectiveEncryptionAdapter:
     
     def encrypt_gradients(self, gradients: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
         """Encrypt gradients (selective by layer) with metadata preservation"""
-        if not self.enabled or not self.encrypt_gradients:
+        if not self.enabled or not self.encrypt_gradients_enabled:
             # Return wrapped entries even when encryption is disabled
             out = {}
             for name, grad in gradients.items():
@@ -1135,7 +1136,7 @@ class SelectiveEncryptionAdapter:
     
     def encrypt_update(self, update: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
         """Encrypt model update (selective by layer) with metadata preservation"""
-        if not self.enabled or not self.encrypt_updates:
+        if not self.enabled or not self.encrypt_updates_enabled:
             # Return wrapped entries even when encryption is disabled
             out = {}
             for name, tensor in update.items():
@@ -1173,7 +1174,7 @@ class SelectiveEncryptionAdapter:
     
     def encrypt_communication(self, data: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
         """Encrypt data for client-server communication"""
-        if not self.enabled or not self.encrypt_communication:
+        if not self.enabled or not self.encrypt_communication_enabled:
             return data
         
         return self.he_adapter.encrypt_dict(data)
@@ -1183,7 +1184,7 @@ class SelectiveEncryptionAdapter:
         Decrypt data from client-server communication.
         Handles both wrapped entry format and direct HE format.
         """
-        if not self.enabled or not self.encrypt_communication:
+        if not self.enabled or not self.encrypt_communication_enabled:
             # If not encrypted, extract data from wrapped format if needed
             result = {}
             for key, entry in encrypted_data.items():
@@ -1373,9 +1374,9 @@ class SelectiveEncryptionAdapter:
             "adapter_method": self.encryption_method,
             "he_metrics": self.he_adapter.metrics.copy(),
             "layers_encrypted": self.layers_to_encrypt,
-            "encrypt_communication": self.encrypt_communication,
-            "encrypt_gradients": self.encrypt_gradients,
-            "encrypt_updates": self.encrypt_updates,
+            "encrypt_communication": self.encrypt_communication_enabled,
+            "encrypt_gradients": self.encrypt_gradients_enabled,
+            "encrypt_updates": self.encrypt_updates_enabled,
         }
     
     def reset_metrics(self):
