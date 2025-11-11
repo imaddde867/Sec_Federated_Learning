@@ -246,9 +246,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         self._fallback = MockHEAdapter(enabled, key)
         
         if not TENSEAL_AVAILABLE:
-            logger.warning("TenSEAL not available, falling back to MockHEAdapter")
-            self.tenseal_available = False
-            return
+            raise EncryptionError("TenSEAL is required for CKKS encryption but is not installed.")
         
         self.tenseal_available = True
         self.poly_modulus_degree = poly_modulus_degree
@@ -282,10 +280,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             context.generate_galois_keys()
             return context
         except Exception as e:
-            logger.error(f"Failed to create TenSEAL context: {e}")
-            self.tenseal_available = False
-            self._fallback = MockHEAdapter(self.enabled)
-            return None
+            raise EncryptionError(f"Failed to create TenSEAL CKKS context: {e}") from e
     
     def _to_numpy(self, tensor: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         """Convert to numpy array"""
@@ -306,91 +301,17 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         if not self.enabled:
             return {"data": tensor, "encrypted": False}
         
-        if not self.tenseal_available:
-            return self._fallback.encrypt_tensor(tensor)
-        
         arr = self._to_numpy(tensor)
-        flat = arr.ravel()
-        max_slots = self.poly_modulus_degree // 2  # CKKS can encrypt poly_modulus_degree/2 values
-        
-        # Check if we need to chunk
-        if len(flat) > max_slots:
-            # Chunk the tensor and encrypt each chunk
-            chunks = []
-            num_chunks = (len(flat) + max_slots - 1) // max_slots
-            
-            start_time = time.perf_counter()
-            for i in range(num_chunks):
-                start_idx = i * max_slots
-                end_idx = min((i + 1) * max_slots, len(flat))
-                chunk = flat[start_idx:end_idx].tolist()
-                
-                # Pad to max_slots if needed (for last chunk)
-                if len(chunk) < max_slots:
-                    chunk.extend([0.0] * (max_slots - len(chunk)))
-                
-                encrypted_chunk = ts.ckks_vector(self.context, chunk)
-                serialized_chunk = encrypted_chunk.serialize()
-                chunks.append(base64.b64encode(serialized_chunk).decode('ascii'))
-                del encrypted_chunk, serialized_chunk  # Free memory immediately
-            
-            enc_time = time.perf_counter() - start_time
-            gc.collect()  # Force garbage collection after chunking
-            
-            self.metrics["encryption_time"] += enc_time
-            self.metrics["num_encryptions"] += 1
-            self.metrics["total_encrypted_bytes"] += sum(len(c.encode('ascii')) for c in chunks)
-            
-            return {
-                "encrypted": True,
-                "scheme": "CKKS",
-                "chunked": True,
-                "data": chunks,  # List of base64-encoded chunks
-                "shape": list(arr.shape),
-                "dtype": "float32",
-                "num_chunks": num_chunks,
-                "chunk_size": max_slots,
-            }
-        else:
-            # Single chunk - original behavior
-            flat_list = flat.tolist()
-            # Pad to max_slots for efficiency
-            if len(flat_list) < max_slots:
-                flat_list.extend([0.0] * (max_slots - len(flat_list)))
-            
-            try:
-                start_time = time.perf_counter()
-                encrypted_vector = ts.ckks_vector(self.context, flat_list)
-                enc_time = time.perf_counter() - start_time
-                
-                # Serialize immediately and delete vector to free memory
-                serialized = encrypted_vector.serialize()
-                del encrypted_vector  # Free memory immediately
-                gc.collect()  # Force garbage collection
-                
-                self.metrics["encryption_time"] += enc_time
-                self.metrics["num_encryptions"] += 1
-                self.metrics["total_encrypted_bytes"] += len(serialized)
-                
-                return {
-                    "encrypted": True,
-                    "scheme": "CKKS",
-                    "chunked": False,
-                    "data": base64.b64encode(serialized).decode('ascii'),
-                    "shape": list(arr.shape),
-                    "dtype": "float32",
-                }
-            except Exception as e:
-                logger.error(f"TenSEAL encryption failed: {e}, falling back to mock")
-                return self._fallback.encrypt_tensor(tensor)
     
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
         """Decrypt tensor using TenSEAL CKKS, handling chunked tensors"""
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
-        if not self.tenseal_available or encrypted.get("scheme") != "CKKS":
-            return self._fallback.decrypt_tensor(encrypted, shape, dtype)
+        if not self.tenseal_available:
+            raise EncryptionError("TenSEAL is required for decryption but is not available.")
+        if encrypted.get("scheme") != "CKKS":
+            raise EncryptionError(f"Unsupported encryption scheme for decryption: {encrypted.get('scheme')}. Expected CKKS.")
         
         try:
             start_time = time.perf_counter()
@@ -437,8 +358,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             
             return self._to_torch(arr)
         except Exception as e:
-            logger.error(f"TenSEAL decryption failed: {e}, falling back to mock")
-            return self._fallback.decrypt_tensor(encrypted, shape, dtype)
+            raise EncryptionError(f"TenSEAL decryption failed: {e}") from e
     
     def encrypt_dict(self, tensor_dict: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
         """Encrypt dictionary of tensors"""
@@ -467,9 +387,6 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         """Aggregate encrypted updates using homomorphic addition"""
         if not encrypted_list:
             return {}
-        
-        if not self.tenseal_available:
-            return self._fallback.aggregate_encrypted(encrypted_list, weights)
         
         if weights is None:
             weights = [1.0 / len(encrypted_list)] * len(encrypted_list)
@@ -584,16 +501,7 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
                         "dtype": "float32",
                     }
             except Exception as e:
-                logger.error(f"TenSEAL aggregation failed for key {key}: {e}")
-                # Fallback to mock
-                if not hasattr(self, '_fallback'):
-                    self._fallback = MockHEAdapter(self.enabled)
-                fallback_result = self._fallback.aggregate_encrypted(
-                    [{k: v for k, v in enc_dict.items() if k == key} for enc_dict in encrypted_list],
-                    weights
-                )
-                if key in fallback_result:
-                    aggregated[key] = fallback_result[key]
+                raise EncryptionError(f"TenSEAL aggregation failed for key {key}: {e}") from e
         
         return aggregated
 
@@ -612,9 +520,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         self._fallback = MockHEAdapter(enabled, key)
         
         if not TENSEAL_AVAILABLE:
-            logger.warning("TenSEAL not available, falling back to MockHEAdapter")
-            self.tenseal_available = False
-            return
+            raise EncryptionError("TenSEAL is required for BFV encryption but is not installed.")
         
         self.tenseal_available = True
         self.poly_modulus_degree = poly_modulus_degree
@@ -644,10 +550,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             context.generate_galois_keys()
             return context
         except Exception as e:
-            logger.error(f"Failed to create TenSEAL BFV context: {e}")
-            self.tenseal_available = False
-            self._fallback = MockHEAdapter(self.enabled)
-            return None
+            raise EncryptionError(f"Failed to create TenSEAL BFV context: {e}") from e
     
     def _to_numpy(self, tensor: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         """Convert to numpy array, scale for BFV (integer only)"""
@@ -671,9 +574,6 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         """Encrypt tensor using TenSEAL BFV with automatic chunking for large tensors"""
         if not self.enabled:
             return {"data": tensor, "encrypted": False}
-        
-        if not self.tenseal_available:
-            return self._fallback.encrypt_tensor(tensor)
         
         arr_int = self._to_numpy(tensor)
         flat = arr_int.ravel()
@@ -748,16 +648,17 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                     "scale_factor": 1e6,
                 }
             except Exception as e:
-                logger.error(f"TenSEAL BFV encryption failed: {e}, falling back to mock")
-                return self._fallback.encrypt_tensor(tensor)
+                raise EncryptionError(f"TenSEAL encryption failed: {e}") from e
     
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
         """Decrypt tensor using TenSEAL BFV, handling chunked tensors"""
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
-        if not self.tenseal_available or encrypted.get("scheme") != "BFV":
-            return self._fallback.decrypt_tensor(encrypted, shape, dtype)
+        if not self.tenseal_available:
+            raise EncryptionError("TenSEAL is required for decryption but is not available.")
+        if encrypted.get("scheme") != "BFV":
+            raise EncryptionError(f"Unsupported encryption scheme for decryption: {encrypted.get('scheme')}. Expected BFV.")
         
         try:
             start_time = time.perf_counter()
@@ -804,8 +705,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
             
             return self._from_numpy(arr_int)
         except Exception as e:
-            logger.error(f"TenSEAL BFV decryption failed: {e}, falling back to mock")
-            return self._fallback.decrypt_tensor(encrypted, shape, dtype)
+            raise EncryptionError(f"TenSEAL decryption failed: {e}") from e
     
     def encrypt_dict(self, tensor_dict: Dict[str, Union[torch.Tensor, np.ndarray]]) -> Dict[str, Any]:
         """Encrypt dictionary of tensors"""
@@ -834,9 +734,6 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         """Aggregate encrypted updates using homomorphic addition"""
         if not encrypted_list:
             return {}
-        
-        if not self.tenseal_available:
-            return self._fallback.aggregate_encrypted(encrypted_list, weights)
         
         if weights is None:
             weights = [1.0 / len(encrypted_list)] * len(encrypted_list)
@@ -953,15 +850,7 @@ class TenSEALBFVAdapter(BaseHEAdapter):
                         "scale_factor": 1e6,
                     }
             except Exception as e:
-                logger.error(f"TenSEAL BFV aggregation failed for key {key}: {e}")
-                if not hasattr(self, '_fallback'):
-                    self._fallback = MockHEAdapter(self.enabled)
-                fallback_result = self._fallback.aggregate_encrypted(
-                    [{k: v for k, v in enc_dict.items() if k == key} for enc_dict in encrypted_list],
-                    weights
-                )
-                if key in fallback_result:
-                    aggregated[key] = fallback_result[key]
+                raise EncryptionError(f"TenSEAL aggregation failed for key {key}: {e}") from e
         
         return aggregated
 
