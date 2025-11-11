@@ -328,15 +328,22 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
             except Exception as e:
                 raise EncryptionError(f"Failed to encrypt chunk {i}: {e}") from e
         elapsed = time.perf_counter() - start_time
+        
+        # Update metrics
+        self.metrics["encryption_time"] += elapsed
+        self.metrics["num_encryptions"] += 1
+        self.metrics["total_encrypted_bytes"] += sum(len(c.encode('utf-8')) for c in encrypted_chunks)
+        
         return {
             "data": encrypted_chunks,
             "encrypted": True,
             "scheme": "CKKS",
-            "shape": shape,
+            "shape": list(shape),
             "dtype": dtype,
             "num_chunks": num_chunks,
             "chunk_size": chunk_size,
             "chunk_shapes": chunk_shapes,
+            "chunked": num_chunks > 1,
             "encryption_time": elapsed,
         }
     def decrypt_tensor(self, encrypted: Dict[str, Any], shape: Optional[Tuple] = None, dtype: str = "float32") -> Union[torch.Tensor, np.ndarray]:
@@ -344,8 +351,6 @@ class TenSEALCKKSAdapter(BaseHEAdapter):
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
-        if not self.tenseal_available:
-            raise EncryptionError("TenSEAL is required for decryption but is not available.")
         if encrypted.get("scheme") != "CKKS":
             raise EncryptionError(f"Unsupported encryption scheme for decryption: {encrypted.get('scheme')}. Expected CKKS.")
         
@@ -691,8 +696,6 @@ class TenSEALBFVAdapter(BaseHEAdapter):
         if not encrypted.get("encrypted", False):
             return encrypted.get("data")
         
-        if not self.tenseal_available:
-            raise EncryptionError("TenSEAL is required for decryption but is not available.")
         if encrypted.get("scheme") != "BFV":
             raise EncryptionError(f"Unsupported encryption scheme for decryption: {encrypted.get('scheme')}. Expected BFV.")
         
