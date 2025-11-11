@@ -1,3 +1,6 @@
 Celesteritesh/
 imad-yan/
 
+
+# Keep the core code tracked
+!core-safe/
