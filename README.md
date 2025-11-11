@@ -10,7 +10,7 @@ This repository contains a compact, configurable Federated Learning (FL) runner 
   - Optional HE path: encrypt client updates and homomorphically aggregate.
 - `src/core-safe/encryption_adapter.py`: HE adapters
   - Mock adapter (no real crypto) for fast testing.
-  - TenSEAL CKKS/BFV adapters with chunking for large tensors and weighted aggregation; automatic fallback to mock if TenSEAL isn’t available.
+  - TenSEAL CKKS/BFV adapters with chunking for large tensors and weighted aggregation. TenSEAL is now required for these adapters; if TenSEAL is unavailable, an `EncryptionError` will be raised.
 - `src/core-safe/dp_utils.py`: Minimal DP utilities (clip grads, add Gaussian noise). Not a full accountant; integrate Opacus later if needed.
 - `src/core-safe/run_experiment.py`: CLI to run FL experiments and emit metrics JSON.
 - `src/core-safe/enc_test.ipynb`: Notebook baseline for FedAvg with encryption configuration and telemetry capture.
@@ -36,7 +36,7 @@ conda activate fl_privacy
 ```
 
 2) Optional: TenSEAL for real HE
-- TenSEAL is optional. If not installed, the system falls back to the mock adapter.
+- TenSEAL is required for CKKS/BFV encryption. If not installed, those methods will raise an `EncryptionError`.
 - To use CKKS/BFV, install TenSEAL per its docs, then select `--method ckks` or `--method bfv`.
 
 3) Run an experiment (CLI)
@@ -59,7 +59,7 @@ python src/core-safe/run_experiment.py \
 - Set `export_client_updates=True` in `FLConfig` to persist plaintext client deltas per round under `reports/<experiment>/client_updates/` for analysis and attack simulations.
 
 ## Notes and Status
-- HE: CKKS/BFV adapters support automatic chunking and weighted homomorphic aggregation, with a safe fallback to a mock adapter when TenSEAL is unavailable.
+- HE: CKKS/BFV adapters support automatic chunking and weighted homomorphic aggregation. TenSEAL is now required for these adapters; if TenSEAL is unavailable, an `EncryptionError` will be raised.
 - DP: hooks are minimal (clip + Gaussian noise) and do not include privacy accounting yet.
 - Datasets/Model: defaults to CIFAR‑100 + ResNet‑18; GPU is used if available.
 
