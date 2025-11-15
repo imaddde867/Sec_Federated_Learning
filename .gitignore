@@ -15,3 +15,7 @@ __pycache__/
 *.pyc
 data/
 reports/
+
+# Ignore all markdown files except README.md
+*.md
+!README.md
